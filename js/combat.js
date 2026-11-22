@@ -1,10 +1,10 @@
 // =====================================================================
 //  БОЙ (пошаговый)
-//  Бой идёт, пока в комнате с игроком есть монстр.
-//  Каждое действие игрока в бою = один ход. После него ходит монстр.
+//  Бой идёт, пока в комнате с героем есть монстр.
+//  Каждое действие героя в бою = один ход. После него ходит монстр.
 // =====================================================================
 
-const MISS_CHANCE = 0.1; // 10% промахов — и у игрока, и у монстра
+const MISS_CHANCE = 0.1; // 10% промахов — и у героя, и у монстра
 
 function inCombat() {
   const room = currentRoom();
@@ -16,7 +16,7 @@ function monsterLabel(monster) {
   return `${t.emoji} ${t.name}`;
 }
 
-// Удар оружием: зависит от СИЛ и оружия, броня монстра уменьшает урон
+// Удар: зависит от уровня и оружия, броня монстра уменьшает урон
 function playerAttack() {
   const p = game.player;
   const monster = currentRoom().monster;
@@ -25,49 +25,14 @@ function playerAttack() {
   if (chance(MISS_CHANCE)) {
     say(`Ты замахиваешься... и промахиваешься!`, "combat");
   } else {
-    const damage = Math.max(1, rand(1, 4) + p.str + equipmentBonus("attack") - t.defense);
+    const damage = Math.max(1, rand(1, 4) + p.level + equipmentBonus("attack") - t.defense);
     monster.hp -= damage;
     say(`Ты бьёшь: ${monsterLabel(monster)} получает ${damage} урона.`, "combat");
   }
   afterPlayerTurn();
 }
 
-// Заклинание: зависит от ИНТ и посоха. Возвращает true, если получилось.
-function castSpell(spellId) {
-  const p = game.player;
-  const spell = SPELLS[spellId];
-  if (p.mp < spell.cost) {
-    say(`Не хватает маны: нужно ${spell.cost}, а у тебя ${p.mp}.`, "bad");
-    return false;
-  }
-
-  const power = spell.power + rand(1, 4) + p.int + equipmentBonus("magic");
-
-  if (spell.kind === "damage") {
-    if (!inCombat()) {
-      say("Здесь не в кого колдовать.", "bad");
-      return false;
-    }
-    p.mp -= spell.cost;
-    const monster = currentRoom().monster;
-    monster.hp -= power;
-    say(`${spell.emoji} ${spell.name}! ${monsterLabel(monster)} получает ${power} урона.`, "combat");
-  } else if (spell.kind === "heal") {
-    if (p.hp >= maxHp()) {
-      say("Ты и так полностью здоров(а).", "bad");
-      return false;
-    }
-    p.mp -= spell.cost;
-    const before = p.hp;
-    p.hp = Math.min(maxHp(), p.hp + power);
-    say(`${spell.emoji} ${spell.name}! +${p.hp - before} здоровья.`, "good");
-  }
-
-  if (inCombat()) afterPlayerTurn();
-  return true;
-}
-
-// Вызывается после каждого хода игрока в бою
+// Вызывается после каждого хода героя в бою
 function afterPlayerTurn() {
   const room = currentRoom();
   const monster = room.monster;
@@ -113,14 +78,13 @@ function defeatMonster(room) {
   gainXp(t.xp);
 }
 
-// Игрок не умирает насовсем: он просыпается у входа и теряет половину золота
+// Герой не умирает насовсем: он просыпается у входа и теряет половину золота
 function playerDies(room) {
   const p = game.player;
   room.monster.hp = MONSTERS[room.monster.id].hp; // монстр восстанавливается
   const lost = Math.floor(p.gold / 2);
   p.gold -= lost;
   p.hp = maxHp();
-  p.mp = maxMp();
   say(`💫 Ты теряешь сознание... и просыпаешься у входа. Потеряно ${lost} 🪙.`, "bad");
   moveTo(0, 0);
 }

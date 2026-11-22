@@ -1,46 +1,37 @@
 // =====================================================================
 //  СОДЕРЖИМОЕ ИГРЫ
 //  Это самый простой файл для изменений: здесь живут предметы,
-//  монстры, друзья, заклинания и названия комнат.
+//  монстры, друзья и названия комнат.
 //  Добавляй своё — просто скопируй похожую запись и поменяй её!
 // =====================================================================
 
 // ----- Предметы -------------------------------------------------------
-// slot: "mainHand" — основная рука (меч или посох)
+// keyword — английские слова для команд: "equip iron sword" или просто "equip sword"
+// slot: "mainHand" — основная рука (меч)
 //       "offHand"  — вторая рука (щит)
 // attack  — добавка к урону от удара
 // defense — уменьшает урон от монстров
-// magic   — добавка к силе заклинаний
-// keyword — английское слово для команд: "equip sword", "use potion"
-// heal / mana — предмет можно выпить: восстанавливает здоровье / ману
+// heal    — предмет можно выпить: восстанавливает здоровье
 const ITEMS = {
   rusty_sword: {
-    keyword: "sword", name: "Ржавый меч", emoji: "🗡️", slot: "mainHand", attack: 2,
+    keyword: "rusty sword", name: "Ржавый меч", emoji: "🗡️", slot: "mainHand", attack: 2,
     description: "Старый и щербатый, но всё ещё острый.",
   },
   iron_sword: {
-    keyword: "sword", name: "Железный меч", emoji: "⚔️", slot: "mainHand", attack: 4,
+    keyword: "iron sword", name: "Железный меч", emoji: "⚔️", slot: "mainHand", attack: 4,
     description: "Крепкий, хорошо выкованный клинок.",
   },
-  oak_staff: {
-    keyword: "staff", name: "Дубовый посох", emoji: "🪄", slot: "mainHand", attack: 1, magic: 3,
-    description: "Гудит от магии. Делает заклинания сильнее.",
-  },
   wooden_shield: {
-    keyword: "shield", name: "Деревянный щит", emoji: "🛡️", slot: "offHand", defense: 1,
+    keyword: "wooden shield", name: "Деревянный щит", emoji: "🛡️", slot: "offHand", defense: 1,
     description: "Лучше, чем ничего.",
   },
   iron_shield: {
-    keyword: "shield", name: "Железный щит", emoji: "🔰", slot: "offHand", defense: 2,
+    keyword: "iron shield", name: "Железный щит", emoji: "🔰", slot: "offHand", defense: 2,
     description: "Тяжёлый, но надёжный.",
   },
   health_potion: {
     keyword: "potion", name: "Зелье здоровья", emoji: "🧪", heal: 12,
     description: "Красное и пузырится. Восстанавливает здоровье.",
-  },
-  mana_potion: {
-    keyword: "mana", name: "Зелье маны", emoji: "🔮", mana: 10,
-    description: "Синее и светится. Восстанавливает ману.",
   },
 };
 
@@ -50,31 +41,8 @@ const SLOTS = {
   offHand: "Вторая рука",
 };
 
-// Что может лежать в сокровищнице
-const TREASURE_LOOT = [
-  "health_potion", "health_potion", "health_potion",
-  "mana_potion", "mana_potion",
-  "wooden_shield", "iron_sword", "iron_shield", "oak_staff",
-];
-
-// ----- Заклинания -----------------------------------------------------
-// kind: "damage" — бьёт монстра (броня не помогает!)
-//       "heal"   — лечит игрока
-// cost  — сколько маны тратит
-// power — базовая сила (к ней добавляются ИНТ, магия посоха и бросок кубика)
-const SPELLS = {
-  fireball: {
-    name: "Огненный шар", emoji: "🔥", kind: "damage", cost: 4, power: 4,
-    description: "Бросает шар огня во врага.",
-  },
-  heal: {
-    name: "Лечение", emoji: "💚", kind: "heal", cost: 3, power: 6,
-    description: "Затягивает раны.",
-  },
-};
-
 // ----- Монстры --------------------------------------------------------
-// level — чем дальше комната от входа, тем сильнее монстры там появляются
+// level — насколько монстр опасен (подсказка для строителя)
 // gold  — [от, до] сколько золота выпадает
 // loot  — какой предмет может выпасть и с каким шансом (0.3 = 30%)
 const MONSTERS = {
@@ -89,7 +57,6 @@ const MONSTERS = {
   slime: {
     name: "Слизень", emoji: "🟢", level: 2,
     hp: 12, attack: 3, defense: 0, xp: 5, gold: [1, 3],
-    loot: { item: "mana_potion", chance: 0.3 },
   },
   goblin: {
     name: "Гоблин", emoji: "👺", level: 2,
@@ -120,7 +87,7 @@ const MONSTERS = {
 // ----- Друзья (мирные персонажи) ---------------------------------------
 // lines   — что персонаж говорит (по очереди, по кругу)
 // gift    — предмет, который он подарит при первом разговоре
-// service — "heal": полностью лечит игрока при каждом разговоре
+// service — "heal": полностью лечит героя при каждом разговоре
 const NPCS = {
   healer: {
     name: "Сестра Мира", emoji: "🧝‍♀️", service: "heal",
@@ -137,11 +104,11 @@ const NPCS = {
     ],
   },
   wizard: {
-    name: "Старый Зиб", emoji: "🧙", gift: "oak_staff",
+    name: "Старый Зиб", emoji: "🧙", gift: "health_potion",
     lines: [
-      "Ага! Чувствую в тебе искру магии. Возьми этот посох.",
-      "Чем выше ИНТ, тем сильнее заклинания. Тренируй ум!",
-      "Огонь не боится брони. Запомни это.",
+      "Ага, путник! Возьми зелье, внизу оно пригодится.",
+      "Щит уменьшает урон от каждого удара. Не забывай про него!",
+      "Если враг слишком силён — беги (flee) и возвращайся потом.",
     ],
   },
   ghost: {

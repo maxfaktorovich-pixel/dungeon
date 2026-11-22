@@ -27,15 +27,34 @@ body {
   font-family: system-ui, sans-serif;
   height: 100vh;
   overflow: hidden;
+  display: flex;
+  flex-direction: column;
 }
 
+/* ----- Верхняя полоска и режимы ----- */
+#topbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px 12px 0;
+}
+#topbar h1 { margin: 0; font-size: 18px; color: var(--accent); }
+#modes { display: flex; gap: 6px; }
+#modes button { font-size: 15px; padding: 6px 14px; }
+
 #app {
+  flex: 1;
   display: grid;
-  grid-template-columns: minmax(300px, 1fr) minmax(380px, 1.3fr) 290px;
   gap: 10px;
   padding: 10px;
-  height: 100vh;
+  min-height: 0;
 }
+/* Приключение: карта | текст | герой */
+#app.mode-adventure { grid-template-columns: minmax(300px, 1fr) minmax(380px, 1.3fr) 290px; }
+/* Строитель: карта | редактор комнаты */
+#app.mode-builder { grid-template-columns: 1fr 380px; }
+#app.mode-adventure .builder-only,
+#app.mode-builder .adventure-only { display: none; }
 
 .panel {
   background: var(--panel);
@@ -66,8 +85,7 @@ button.active { background: var(--accent); color: #000; border-color: var(--acce
 
 /* ----- Карта ----- */
 #map-panel { position: relative; }
-#brushes { display: flex; flex-wrap: wrap; gap: 4px; }
-#brush-hint { color: var(--muted); font-size: 12px; margin: 6px 0; min-height: 16px; }
+#map-hint { color: var(--muted); font-size: 12px; margin-bottom: 6px; }
 
 #map-wrap {
   flex: 1;
@@ -95,7 +113,10 @@ button.active { background: var(--accent); color: #000; border-color: var(--acce
   user-select: none;
 }
 
-.cell.room { background: var(--room); border: 2px solid #3a4660; cursor: pointer; }
+.cell.room { background: var(--room); border: 2px solid #3a4660; }
+.mode-builder .cell.room { cursor: pointer; }
+.mode-builder .cell.room:hover { border-color: var(--build); }
+.cell.room.selected { outline: 3px solid var(--build); outline-offset: 2px; }
 .cell.room.here { border-color: var(--accent); box-shadow: 0 0 10px var(--accent); }
 .cell.room.danger { border-color: var(--bad); }
 .cell .badge {
@@ -173,10 +194,16 @@ button.active { background: var(--accent); color: #000; border-color: var(--acce
   overflow-y: auto;
 }
 #actions .situation { color: var(--accent); margin-bottom: 6px; }
-#actions .row { display: flex; align-items: baseline; gap: 6px; margin: 3px 0; flex-wrap: wrap; }
-#actions .row .what { color: var(--muted); min-width: 150px; }
-#actions button { font-family: Menlo, Consolas, monospace; font-size: 12px; padding: 2px 6px; }
-#actions button.fill { border-style: dashed; }
+#actions .row { margin: 3px 0; color: var(--muted); }
+#actions code, .kw {
+  font-family: Menlo, Consolas, monospace;
+  color: var(--text);
+  background: #232a38;
+  border-radius: 4px;
+  padding: 1px 5px;
+  font-size: 12px;
+}
+.kw { color: var(--muted); background: none; padding: 0; }
 
 #command-form {
   display: flex;
@@ -203,10 +230,30 @@ button.active { background: var(--accent); color: #000; border-color: var(--acce
 .bar > div { height: 100%; }
 .bar span { position: absolute; inset: 0; font-size: 11px; text-align: center; line-height: 16px; }
 .bar.hp > div { background: #b33a3a; }
-.bar.mp > div { background: #3a5fb3; }
 .bar.xp > div { background: #8a6d1f; }
-.stat-line { display: flex; justify-content: space-between; align-items: center; margin: 4px 0; }
-.item-line { display: flex; justify-content: space-between; align-items: center; gap: 4px; margin: 3px 0; }
-.item-line .btns { display: flex; gap: 3px; }
-.item-line button { font-size: 11px; padding: 1px 5px; }
+.stat-line { margin: 4px 0; }
+.item-line { margin: 3px 0; }
+.item-line button { font-size: 11px; padding: 1px 6px; }
 .muted { color: var(--muted); }
+.small { font-size: 12px; margin-top: 4px; }
+
+/* ----- Редактор комнаты (строитель) ----- */
+#editor-panel { overflow-y: auto; font-size: 14px; }
+#editor label { display: block; margin: 12px 0 4px; color: var(--build); font-size: 13px; }
+#editor input, #editor textarea, #editor select {
+  width: 100%;
+  background: #0b0d12;
+  color: var(--text);
+  border: 1px solid var(--border);
+  border-radius: 5px;
+  padding: 6px;
+  font: inherit;
+}
+#editor textarea { resize: vertical; }
+#editor input:focus, #editor textarea:focus, #editor select:focus { outline: none; border-color: var(--build); }
+#ed-message { color: var(--build); min-height: 18px; margin-top: 4px; }
+.ed-row { display: flex; gap: 6px; margin-top: 6px; }
+.ed-row select { flex: 1; }
+.ed-buttons { margin-top: 18px; flex-wrap: wrap; }
+button:disabled { opacity: 0.4; cursor: not-allowed; border-color: var(--border); }
+.danger-btn:not(:disabled):hover { border-color: var(--bad); color: var(--bad); }

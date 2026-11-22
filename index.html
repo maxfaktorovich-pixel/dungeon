@@ -7,20 +7,21 @@
   <link rel="stylesheet" href="style.css">
 </head>
 <body>
-  <div id="app">
-    <!-- ===== Левая колонка: карта ===== -->
+  <!-- ===== Верхняя полоска: переключатель режимов ===== -->
+  <header id="topbar">
+    <h1>🏰 Подземелье Строителя</h1>
+    <div id="modes">
+      <button data-mode="adventure" class="active">⚔️ Приключение</button>
+      <button data-mode="builder">🧱 Строитель</button>
+    </div>
+  </header>
+
+  <!-- Класс mode-adventure / mode-builder решает, какие панели видны -->
+  <div id="app" class="mode-adventure">
+    <!-- ===== Карта (есть в обоих режимах) ===== -->
     <section class="panel" id="map-panel">
       <h2>🗺️ Карта подземелья</h2>
-      <div id="brushes">
-        <!-- data-brush — что делает клик по карте -->
-        <button data-brush="walk" class="active" title="Клик по соседней комнате — пойти туда">🚶 Ходить</button>
-        <button data-brush="room" title="Клик по пустой клетке рядом с комнатой — построить пустую комнату">🧱 Комната</button>
-        <button data-brush="monster" title="Построить комнату с монстром или добавить монстра в комнату">👹 Монстр</button>
-        <button data-brush="friend" title="Построить комнату с другом или поселить друга в комнату">🙂 Друг</button>
-        <button data-brush="treasure" title="Построить сокровищницу или добавить сокровища в комнату">💰 Клад</button>
-        <button data-brush="delete" title="Клик по комнате — снести её">❌ Снести</button>
-      </div>
-      <div id="brush-hint"></div>
+      <div id="map-hint"></div>
       <div id="map-wrap">
         <div id="map"></div>
       </div>
@@ -34,8 +35,8 @@
       </div>
     </section>
 
-    <!-- ===== Средняя колонка: текстовое окно ===== -->
-    <section class="panel" id="text-panel">
+    <!-- ===== ПРИКЛЮЧЕНИЕ: текстовое окно ===== -->
+    <section class="panel adventure-only" id="text-panel">
       <div id="log"></div>
       <div id="actions"></div>
       <form id="command-form" autocomplete="off">
@@ -44,9 +45,14 @@
       </form>
     </section>
 
-    <!-- ===== Правая колонка: персонаж ===== -->
-    <section class="panel" id="stats-panel">
+    <!-- ===== ПРИКЛЮЧЕНИЕ: герой ===== -->
+    <section class="panel adventure-only" id="stats-panel">
       <div id="stats"></div>
+    </section>
+
+    <!-- ===== СТРОИТЕЛЬ: редактор комнаты ===== -->
+    <section class="panel builder-only" id="editor-panel">
+      <div id="editor"></div>
     </section>
   </div>
 
@@ -58,6 +64,7 @@
   <script src="js/combat.js"></script>
   <script src="js/commands.js"></script>
   <script src="js/ui.js"></script>
+  <script src="js/builder.js"></script>
   <script src="js/main.js"></script>
 </body>
 </html>

@@ -45,11 +45,6 @@ function exitsOf(room) {
   return Object.keys(DIRECTIONS).filter((dir) => neighbor(room, dir));
 }
 
-// Расстояние от входа (по клеткам)
-function distanceFromStart(x, y) {
-  return Math.abs(x) + Math.abs(y);
-}
-
 // Можно ли построить комнату в этой клетке?
 // Да, если клетка пустая и рядом есть хотя бы одна комната.
 function isBuildable(x, y) {
@@ -58,8 +53,9 @@ function isBuildable(x, y) {
 }
 
 // ----- Создание ---------------------------------------------------------
-// kind: "room" (пустая), "monster", "friend", "treasure"
-function createRoom(x, y, kind) {
+
+// Новая пустая комната со случайным названием и описанием
+function createRoom(x, y) {
   const room = {
     x, y,
     name: pick(ROOM_NAMES),
@@ -70,27 +66,7 @@ function createRoom(x, y, kind) {
     gold: 0,
   };
   game.rooms[roomKey(x, y)] = room;
-  fillRoom(room, kind);
   return room;
-}
-
-// Добавляет в комнату монстра, друга или сокровище
-function fillRoom(room, kind) {
-  if (kind === "monster") {
-    room.monster = makeMonster(randomMonsterIdFor(room));
-  } else if (kind === "friend") {
-    room.npc = makeNpc(pick(Object.keys(NPCS)));
-  } else if (kind === "treasure") {
-    room.items.push(pick(TREASURE_LOOT));
-    room.gold += rand(3, 10);
-  }
-}
-
-// Чем дальше от входа — тем более сильные монстры могут появиться
-function randomMonsterIdFor(room) {
-  const maxLevel = 1 + Math.floor(distanceFromStart(room.x, room.y) / 2);
-  const ids = Object.keys(MONSTERS).filter((id) => MONSTERS[id].level <= maxLevel);
-  return pick(ids);
 }
 
 function makeMonster(id) {
@@ -102,12 +78,13 @@ function makeNpc(id) {
 }
 
 // ----- Удаление ---------------------------------------------------------
+
 // Проверяет, можно ли снести комнату. Возвращает текст ошибки или null.
 function whyCantDelete(x, y) {
   const room = getRoom(x, y);
   if (!room) return "Там нет комнаты.";
   if (x === 0 && y === 0) return "Входной зал сносить нельзя.";
-  if (x === game.player.x && y === game.player.y) return "Нельзя снести комнату, в которой ты стоишь.";
+  if (x === game.player.x && y === game.player.y) return "Здесь стоит герой — сначала переставь его.";
   if (!staysConnectedWithout(x, y)) return "Тогда часть подземелья окажется отрезанной.";
   return null;
 }

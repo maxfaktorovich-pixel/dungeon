@@ -1,7 +1,5 @@
 // =====================================================================
-//  ИГРОК: ХАРАКТЕРИСТИКИ, ОПЫТ, ИНВЕНТАРЬ, СНАРЯЖЕНИЕ
-//  СИЛ (str) — урон мечом и здоровье
-//  ИНТ (int) — сила заклинаний и мана
+//  ГЕРОЙ: ЗДОРОВЬЕ, ОПЫТ, СУМКА, СНАРЯЖЕНИЕ
 // =====================================================================
 
 function newPlayer() {
@@ -10,35 +8,26 @@ function newPlayer() {
     emoji: "🤺",
     level: 1,
     xp: 0,
-    statPoints: 0,
-    str: 3,
-    int: 2,
     gold: 5,
-    x: 0, y: 0,         // где стоит игрок
+    x: 0, y: 0,         // где стоит герой
     lastX: 0, lastY: 0, // откуда пришёл (туда убегаем из боя)
     inventory: ["health_potion"],
     equipment: { mainHand: "rusty_sword", offHand: null },
-    spells: ["fireball", "heal"],
   };
   p.hp = maxHp(p);
-  p.mp = maxMp(p);
   return p;
 }
 
-// Максимум здоровья и маны считается из уровня и характеристик
+// Максимум здоровья растёт с уровнем
 function maxHp(p = game.player) {
-  return 10 + p.level * 5 + p.str * 2;
-}
-
-function maxMp(p = game.player) {
-  return p.int * 3 + p.level * 2;
+  return 15 + p.level * 5;
 }
 
 function xpToNextLevel(p = game.player) {
   return p.level * 10;
 }
 
-// Сумма бонуса (attack, defense или magic) от всего, что в руках
+// Сумма бонуса (attack или defense) от всего, что в руках
 function equipmentBonus(stat) {
   let total = 0;
   for (const id of Object.values(game.player.equipment)) {
@@ -54,15 +43,12 @@ function gainXp(amount) {
   while (p.xp >= xpToNextLevel()) {
     p.xp -= xpToNextLevel();
     p.level += 1;
-    p.statPoints += 2;
     p.hp = maxHp();
-    p.mp = maxMp();
-    say(`🎉 НОВЫЙ УРОВЕНЬ ${p.level}! Здоровье и мана восстановлены.`, "good");
-    say(`У тебя ${p.statPoints} очк. характеристик. Набери: train str или train int`, "good");
+    say(`🎉 НОВЫЙ УРОВЕНЬ ${p.level}! Здоровья стало больше, удар — сильнее.`, "good");
   }
 }
 
-// Ищет предмет в списке id по запросу: "sword", "меч", "iron_sword"...
+// Ищет предмет в списке id по запросу: "sword", "iron sword", "меч"...
 // Возвращает позицию в списке или -1.
 function findItem(list, query) {
   query = query.toLowerCase().trim();
@@ -71,6 +57,7 @@ function findItem(list, query) {
     const item = ITEMS[id];
     return id === query ||
       item.keyword === query ||
+      item.keyword.split(" ").includes(query) ||
       item.name.toLowerCase().includes(query);
   });
 }
@@ -79,15 +66,10 @@ function itemLabel(id) {
   return `${ITEMS[id].emoji} ${ITEMS[id].name}`;
 }
 
-// Какую команду писать для предмета: "sword", "potion"...
-function itemWord(id) {
-  return ITEMS[id].keyword || id;
-}
-
 function equip(query) {
   const p = game.player;
   const index = findItem(p.inventory, query);
-  if (index === -1) return say("У тебя нет такого предмета.", "bad");
+  if (index === -1) return say("У тебя в сумке нет такого предмета.", "bad");
   const id = p.inventory[index];
   const slot = ITEMS[id].slot;
   if (!slot) return say(`${itemLabel(id)} нельзя взять в руку.`, "bad");
@@ -110,49 +92,30 @@ function unequip(query) {
       p.equipment[slot] = null;
       p.inventory.push(id);
       say(`Ты убираешь в сумку: ${itemLabel(id)}.`);
-      return true;
+      return;
     }
   }
   say("У тебя в руках нет такого предмета.", "bad");
-  return false;
 }
 
 // Выпить зелье. Возвращает true, если получилось.
 function useItem(query) {
   const p = game.player;
   const index = findItem(p.inventory, query);
-  if (index === -1) { say("У тебя нет такого предмета.", "bad"); return false; }
+  if (index === -1) { say("У тебя в сумке нет такого предмета.", "bad"); return false; }
   const id = p.inventory[index];
   const item = ITEMS[id];
-  if (!item.heal && !item.mana) {
-    say(`${itemLabel(id)} нельзя использовать. Может, его надо взять в руку (equip)?`, "bad");
+  if (!item.heal) {
+    say(`${itemLabel(id)} нельзя выпить. Может, его надо взять в руку (equip)?`, "bad");
     return false;
   }
-  const healUseless = !item.heal || p.hp >= maxHp();
-  const manaUseless = !item.mana || p.mp >= maxMp();
-  if (healUseless && manaUseless) {
-    say("Сейчас это зелье тебе не нужно — побереги его.", "bad");
+  if (p.hp >= maxHp()) {
+    say("Ты и так полностью здоров(а) — побереги зелье.", "bad");
     return false;
   }
   p.inventory.splice(index, 1);
-  if (item.heal) {
-    const before = p.hp;
-    p.hp = Math.min(maxHp(), p.hp + item.heal);
-    say(`Ты выпиваешь: ${itemLabel(id)}. +${p.hp - before} здоровья.`, "good");
-  }
-  if (item.mana) {
-    const before = p.mp;
-    p.mp = Math.min(maxMp(), p.mp + item.mana);
-    say(`Ты выпиваешь: ${itemLabel(id)}. +${p.mp - before} маны.`, "good");
-  }
+  const before = p.hp;
+  p.hp = Math.min(maxHp(), p.hp + item.heal);
+  say(`Ты выпиваешь: ${itemLabel(id)}. +${p.hp - before} здоровья.`, "good");
   return true;
-}
-
-// Ищет заклинание по запросу: "fireball", "fire", "огонь"...
-function findSpell(query) {
-  query = query.toLowerCase().trim();
-  if (!query) return null;
-  return game.player.spells.find((id) =>
-    id.startsWith(query) || SPELLS[id].name.toLowerCase().includes(query)
-  ) || null;
 }

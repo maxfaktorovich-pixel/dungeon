@@ -1,7 +1,48 @@
 // =====================================================================
-//  ЭКРАН: КАРТА, ТЕКСТОВОЕ ОКНО, ОКНО ПЕРСОНАЖА
-//  Здесь только рисование и клики. Правила игры — в других файлах.
+//  ЭКРАН: РЕЖИМЫ, КАРТА И ПАНЕЛИ ПРИКЛЮЧЕНИЯ
+//  Здесь только рисование. Правила игры — в других файлах.
+//  Режим «Строитель» рисуется в builder.js.
+//
+//  В режиме «Приключение» нет кнопок — только текстовые команды,
+//  как в настоящем MUD. Мышка нужна только строителю.
 // =====================================================================
+
+// "adventure" — приключение, "builder" — строитель
+let mode = "adventure";
+
+function setMode(newMode) {
+  mode = newMode;
+  document.getElementById("app").className = "mode-" + mode;
+  document.querySelectorAll("#modes button").forEach((b) =>
+    b.classList.toggle("active", b.dataset.mode === mode));
+
+  if (mode === "adventure") {
+    say("— Ты возвращаешься в подземелье —", "system");
+    describeRoom();
+    renderAll();
+    document.getElementById("command-input").focus();
+  } else {
+    startBuilder();
+    renderAll();
+  }
+}
+
+function setupModes() {
+  document.querySelectorAll("#modes button").forEach((b) =>
+    b.addEventListener("click", () => {
+      if (b.dataset.mode !== mode) setMode(b.dataset.mode);
+    }));
+}
+
+function renderAll() {
+  renderMap();
+  if (mode === "adventure") {
+    renderStats();
+    renderActions();
+  } else {
+    renderEditor();
+  }
+}
 
 // ----- Текстовое окно ---------------------------------------------------
 
@@ -21,25 +62,7 @@ function clearLog() {
   document.getElementById("log").innerHTML = "";
 }
 
-function renderAll() {
-  renderMap();
-  renderStats();
-  renderActions();
-}
-
 // ----- Карта ------------------------------------------------------------
-
-// Что делает клик по карте (выбирается кнопками над картой)
-let brush = "walk";
-
-const BRUSH_HINTS = {
-  walk: "Кликни по соседней комнате, чтобы пойти туда.",
-  room: "Кликни по пунктирной клетке, чтобы построить пустую комнату.",
-  monster: "Кликни по пустой клетке или по комнате, чтобы добавить монстра.",
-  friend: "Кликни по пустой клетке или по комнате, чтобы поселить друга.",
-  treasure: "Кликни по пустой клетке или по комнате, чтобы спрятать клад.",
-  delete: "Кликни по комнате, чтобы снести её.",
-};
 
 // Какой значок показать в комнате
 function roomIcon(room) {
@@ -55,7 +78,7 @@ function renderMap() {
   const rooms = Object.values(game.rooms);
   const xs = rooms.map((r) => r.x);
   const ys = rooms.map((r) => r.y);
-  // Рисуем на одну клетку шире со всех сторон — там можно строить
+  // Рисуем на одну клетку шире со всех сторон — там строитель может строить
   const minX = Math.min(...xs) - 1, maxX = Math.max(...xs) + 1;
   const minY = Math.min(...ys) - 1, maxY = Math.max(...ys) + 1;
 
@@ -71,79 +94,40 @@ function renderMap() {
         cell.className = "cell room";
         if (getRoom(x + 1, y)) cell.classList.add("door-e");
         if (getRoom(x, y + 1)) cell.classList.add("door-s");
-        if (x === game.player.x && y === game.player.y) {
-          cell.classList.add("here");
-          if (room.monster) cell.classList.add("danger");
-        }
+        const heroHere = x === game.player.x && y === game.player.y;
+        if (heroHere) cell.classList.add("here");
+        if (mode === "builder" && roomKey(x, y) === selectedKey) cell.classList.add("selected");
         cell.textContent = roomIcon(room);
-        // В бою показываем монстра маленьким значком рядом с игроком
-        if (cell.classList.contains("danger")) {
+        cell.title = room.name;
+        // Если герой стоит рядом с монстром — показываем монстра маленьким значком
+        if (heroHere && room.monster) {
+          cell.classList.add("danger");
           const badge = document.createElement("span");
           badge.className = "badge";
           badge.textContent = MONSTERS[room.monster.id].emoji;
           cell.appendChild(badge);
         }
-        cell.title = room.name;
-      } else if (isBuildable(x, y)) {
+      } else if (mode === "builder" && isBuildable(x, y)) {
         cell.className = "cell buildable";
-        cell.title = "Здесь можно построить комнату";
+        cell.title = "Построить здесь комнату";
       } else {
         cell.className = "cell void";
       }
-      cell.addEventListener("click", () => onMapClick(x, y));
+      // Кликать по карте можно только в режиме строителя
+      if (mode === "builder") cell.addEventListener("click", () => onBuilderMapClick(x, y));
       map.appendChild(cell);
     }
   }
+
+  document.getElementById("map-hint").textContent = mode === "builder"
+    ? "Кликни по пунктирной клетке, чтобы построить комнату. Кликни по комнате, чтобы её настроить."
+    : "Ты — это 🤺. Чтобы пойти куда-то, набери направление: n, s, e или w.";
 
   const here = map.querySelector(".here");
   if (here) here.scrollIntoView({ block: "nearest", inline: "nearest" });
 }
 
-function onMapClick(x, y) {
-  const room = getRoom(x, y);
-  const p = game.player;
-
-  if (brush === "walk") {
-    if (!room) return;
-    if (room.x === p.x && room.y === p.y) return runCommand("look");
-    // Ищем направление к соседней комнате
-    const dir = Object.keys(DIRECTIONS).find((d) =>
-      p.x + DIRECTIONS[d].dx === x && p.y + DIRECTIONS[d].dy === y);
-    if (dir) return runCommand(DIRECTIONS[dir].short);
-    say("Это слишком далеко. Ходи по одной комнате.", "bad");
-  } else if (brush === "delete") {
-    if (!room) return;
-    destroyAt(x, y);
-  } else if (room) {
-    if (brush === "room") return say("Здесь уже есть комната.", "bad");
-    addToRoom(room, brush);
-  } else {
-    buildAt(x, y, brush);
-  }
-  saveGame();
-  renderAll();
-}
-
-function setupBrushes() {
-  const buttons = document.querySelectorAll("#brushes button");
-  for (const button of buttons) {
-    button.addEventListener("click", () => {
-      brush = button.dataset.brush;
-      buttons.forEach((b) => b.classList.toggle("active", b === button));
-      document.getElementById("brush-hint").textContent = BRUSH_HINTS[brush];
-    });
-  }
-  document.getElementById("brush-hint").textContent = BRUSH_HINTS[brush];
-}
-
-// ----- «Что можно сделать» ----------------------------------------------
-
-// Подпись на кнопке: к направлениям добавляем русское слово
-function suggestionLabel(cmd) {
-  const words = cmd.trim().split(" ");
-  const dir = parseDirection(words[words.length - 1]);
-  return dir ? `${cmd} (${DIRECTIONS[dir].ru})` : cmd.trim();
-}
+// ----- «Что можно сделать» (только текст, без кнопок) --------------------
 
 function renderActions() {
   const box = document.getElementById("actions");
@@ -163,45 +147,28 @@ function renderActions() {
 
     const row = document.createElement("div");
     row.className = "row";
-    const what = document.createElement("span");
-    what.className = "what";
-    what.textContent = command.help;
-    row.appendChild(what);
-
-    for (const cmd of suggestions) {
-      const button = document.createElement("button");
-      button.textContent = suggestionLabel(cmd);
-      if (cmd.endsWith(" ")) {
-        // Не выполняем сразу — вставляем в строку, чтобы игрок дописал
-        button.className = "fill";
-        button.title = "Вставить в строку ввода и дописать";
-        button.addEventListener("click", () => fillInput(cmd));
-      } else {
-        button.addEventListener("click", () => runCommand(cmd));
-      }
-      row.appendChild(button);
+    for (const [i, text] of suggestions.entries()) {
+      if (i > 0) row.append(", ");
+      const code = document.createElement("code");
+      code.textContent = text;
+      row.appendChild(code);
     }
+    row.append(" — " + command.help);
     box.appendChild(row);
   }
 }
 
-// ----- Окно персонажа ---------------------------------------------------
+// ----- Окно героя -------------------------------------------------------
 
 function bar(cls, value, max, label) {
   const percent = Math.max(0, Math.min(100, (value / max) * 100));
   return `<div class="bar ${cls}"><div style="width:${percent}%"></div><span>${label} ${value}/${max}</span></div>`;
 }
 
-// Кнопка, которая выполняет команду (через data-cmd)
-function cmdButton(cmd, text) {
-  return `<button data-cmd="${cmd}">${text}</button>`;
-}
-
 function renderStats() {
   const p = game.player;
   let html = `<h2>${p.emoji} ${p.name} — уровень ${p.level}</h2>`;
   html += bar("hp", p.hp, maxHp(), "❤️ Здоровье");
-  html += bar("mp", p.mp, maxMp(), "🔷 Мана");
   html += bar("xp", p.xp, xpToNextLevel(), "⭐ Опыт");
 
   if (inCombat()) {
@@ -210,56 +177,31 @@ function renderStats() {
     html += bar("hp", monster.hp, MONSTERS[monster.id].hp, "Здоровье");
   }
 
-  const trainBtn = (stat) => (p.statPoints > 0 ? cmdButton(`train ${stat}`, "+1") : "");
-  html += `<div class="stat-line"><span>💪 СИЛ (str): <b>${p.str}</b></span>${trainBtn("str")}</div>`;
-  html += `<div class="stat-line"><span>🧠 ИНТ (int): <b>${p.int}</b></span>${trainBtn("int")}</div>`;
-  if (p.statPoints > 0) html += `<div class="muted">Свободных очков: ${p.statPoints}</div>`;
-  html += `<div class="stat-line"><span>🪙 Золото: <b>${p.gold}</b></span></div>`;
-  html += `<div class="stat-line muted"><span>Атака +${equipmentBonus("attack")} · Защита +${equipmentBonus("defense")} · Магия +${equipmentBonus("magic")}</span></div>`;
+  html += `<div class="stat-line">🪙 Золото: <b>${p.gold}</b></div>`;
+  html += `<div class="stat-line muted">Атака +${equipmentBonus("attack")} · Защита +${equipmentBonus("defense")}</div>`;
+
+  // В квадратных скобках — слово, которое писать в командах
+  const word = (id) => `<span class="kw">[${ITEMS[id].keyword}]</span>`;
 
   html += `<h3>✋ Снаряжение</h3>`;
   for (const [slot, label] of Object.entries(SLOTS)) {
     const id = p.equipment[slot];
-    html += `<div class="item-line"><span>${label}: ${id ? itemLabel(id) : '<span class="muted">пусто</span>'}</span>`;
-    if (id) html += `<span class="btns">${cmdButton(`remove ${ITEMS[id].name.toLowerCase()}`, "снять")}</span>`;
-    html += `</div>`;
+    html += `<div class="item-line">${label}: ${id ? `${itemLabel(id)} ${word(id)}` : '<span class="muted">пусто</span>'}</div>`;
   }
 
   html += `<h3>🎒 Сумка</h3>`;
   if (p.inventory.length === 0) html += `<div class="muted">Пусто</div>`;
   for (const id of p.inventory) {
-    const item = ITEMS[id];
-    const name = item.name.toLowerCase();
-    let btns = "";
-    if (item.slot) btns += cmdButton(`equip ${name}`, "взять");
-    if (item.heal || item.mana) btns += cmdButton(`use ${name}`, "выпить");
-    btns += cmdButton(`drop ${name}`, "бросить");
-    html += `<div class="item-line" title="${item.description}"><span>${itemLabel(id)}</span><span class="btns">${btns}</span></div>`;
+    html += `<div class="item-line" title="${ITEMS[id].description}">${itemLabel(id)} ${word(id)}</div>`;
   }
 
-  html += `<h3>✨ Заклинания</h3>`;
-  for (const id of p.spells) {
-    const s = SPELLS[id];
-    html += `<div class="item-line" title="${s.description}"><span>${s.emoji} ${s.name} <span class="muted">(${s.cost} маны)</span></span>`;
-    html += `<span class="btns">${cmdButton(`cast ${id}`, "колдовать")}</span></div>`;
-  }
-
-  const stats = document.getElementById("stats");
-  stats.innerHTML = html;
-  stats.querySelectorAll("button[data-cmd]").forEach((b) =>
-    b.addEventListener("click", () => runCommand(b.dataset.cmd)));
+  document.getElementById("stats").innerHTML = html;
 }
 
 // ----- Строка ввода -----------------------------------------------------
 
 const commandHistory = [];
 let historyIndex = 0;
-
-function fillInput(text) {
-  const input = document.getElementById("command-input");
-  input.value = text;
-  input.focus();
-}
 
 function setupInput() {
   const form = document.getElementById("command-form");
