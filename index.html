@@ -1,0 +1,63 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Подземелье Строителя</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <div id="app">
+    <!-- ===== Левая колонка: карта ===== -->
+    <section class="panel" id="map-panel">
+      <h2>🗺️ Карта подземелья</h2>
+      <div id="brushes">
+        <!-- data-brush — что делает клик по карте -->
+        <button data-brush="walk" class="active" title="Клик по соседней комнате — пойти туда">🚶 Ходить</button>
+        <button data-brush="room" title="Клик по пустой клетке рядом с комнатой — построить пустую комнату">🧱 Комната</button>
+        <button data-brush="monster" title="Построить комнату с монстром или добавить монстра в комнату">👹 Монстр</button>
+        <button data-brush="friend" title="Построить комнату с другом или поселить друга в комнату">🙂 Друг</button>
+        <button data-brush="treasure" title="Построить сокровищницу или добавить сокровища в комнату">💰 Клад</button>
+        <button data-brush="delete" title="Клик по комнате — снести её">❌ Снести</button>
+      </div>
+      <div id="brush-hint"></div>
+      <div id="map-wrap">
+        <div id="map"></div>
+      </div>
+      <!-- Компас: чтобы было понятно, куда ведёт "go north" -->
+      <div id="compass" aria-label="Компас">
+        <span class="c-n">N<small>север</small></span>
+        <span class="c-w">W<small>запад</small></span>
+        <span class="c-center">✦</span>
+        <span class="c-e">E<small>восток</small></span>
+        <span class="c-s">S<small>юг</small></span>
+      </div>
+    </section>
+
+    <!-- ===== Средняя колонка: текстовое окно ===== -->
+    <section class="panel" id="text-panel">
+      <div id="log"></div>
+      <div id="actions"></div>
+      <form id="command-form" autocomplete="off">
+        <span class="prompt">&gt;</span>
+        <input id="command-input" placeholder="Введи команду, например: look" autofocus>
+      </form>
+    </section>
+
+    <!-- ===== Правая колонка: персонаж ===== -->
+    <section class="panel" id="stats-panel">
+      <div id="stats"></div>
+    </section>
+  </div>
+
+  <!-- Порядок важен: сначала данные, потом то, что их использует -->
+  <script src="js/data.js"></script>
+  <script src="js/game.js"></script>
+  <script src="js/world.js"></script>
+  <script src="js/player.js"></script>
+  <script src="js/combat.js"></script>
+  <script src="js/commands.js"></script>
+  <script src="js/ui.js"></script>
+  <script src="js/main.js"></script>
+</body>
+</html>

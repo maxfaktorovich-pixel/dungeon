@@ -1,0 +1,212 @@
+/* =====================================================================
+   ВНЕШНИЙ ВИД
+   Цвета задаются переменными — поменяй их, чтобы сменить тему.
+   ===================================================================== */
+:root {
+  --bg: #0d0f14;
+  --panel: #161a22;
+  --border: #2a3140;
+  --text: #d6dbe4;
+  --muted: #7d8799;
+  --accent: #f0b84a;
+  --good: #7ddc84;
+  --bad: #ff7a7a;
+  --combat: #ffb36b;
+  --friend: #8cc8ff;
+  --build: #c79bff;
+  --room: #2a3345;
+  --cell: 52px;
+}
+
+* { box-sizing: border-box; }
+
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--text);
+  font-family: system-ui, sans-serif;
+  height: 100vh;
+  overflow: hidden;
+}
+
+#app {
+  display: grid;
+  grid-template-columns: minmax(300px, 1fr) minmax(380px, 1.3fr) 290px;
+  gap: 10px;
+  padding: 10px;
+  height: 100vh;
+}
+
+.panel {
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 10px;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+
+h2, h3 { margin: 0 0 8px; font-size: 15px; color: var(--accent); }
+h3 { margin-top: 14px; }
+
+button {
+  background: #232a38;
+  color: var(--text);
+  border: 1px solid var(--border);
+  border-radius: 5px;
+  padding: 4px 8px;
+  cursor: pointer;
+  font: inherit;
+  font-size: 13px;
+}
+button:hover { border-color: var(--accent); }
+button.active { background: var(--accent); color: #000; border-color: var(--accent); }
+
+/* ----- Карта ----- */
+#map-panel { position: relative; }
+#brushes { display: flex; flex-wrap: wrap; gap: 4px; }
+#brush-hint { color: var(--muted); font-size: 12px; margin: 6px 0; min-height: 16px; }
+
+#map-wrap {
+  flex: 1;
+  overflow: auto;
+  display: flex;
+  min-height: 0;
+}
+
+#map {
+  display: grid;
+  gap: 8px;
+  margin: auto; /* по центру, пока карта маленькая */
+  padding: 10px;
+}
+
+.cell {
+  width: var(--cell);
+  height: var(--cell);
+  border-radius: 6px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 26px;
+  position: relative;
+  user-select: none;
+}
+
+.cell.room { background: var(--room); border: 2px solid #3a4660; cursor: pointer; }
+.cell.room.here { border-color: var(--accent); box-shadow: 0 0 10px var(--accent); }
+.cell.room.danger { border-color: var(--bad); }
+.cell .badge {
+  position: absolute; right: -8px; top: -8px; font-size: 16px;
+  background: var(--panel); border: 1px solid var(--bad); border-radius: 50%;
+  width: 24px; height: 24px; display: flex; align-items: center; justify-content: center;
+}
+.cell.buildable { border: 2px dashed #2c3445; cursor: pointer; }
+.cell.buildable:hover { border-color: var(--build); }
+.cell.buildable:hover::before { content: "+"; color: var(--build); font-size: 22px; }
+.cell.void { visibility: hidden; }
+
+/* Проходы между соседними комнатами */
+.cell.door-e::after {
+  content: ""; position: absolute; right: -12px; top: 50%;
+  width: 12px; height: 8px; margin-top: -4px; background: #3a4660;
+}
+.cell.door-s::before {
+  content: ""; position: absolute; bottom: -12px; left: 50%;
+  width: 8px; height: 12px; margin-left: -4px; background: #3a4660;
+}
+
+/* Компас */
+#compass {
+  position: absolute;
+  right: 14px;
+  bottom: 14px;
+  width: 110px;
+  height: 110px;
+  border-radius: 50%;
+  background: rgba(13, 15, 20, 0.85);
+  border: 2px solid var(--accent);
+  display: grid;
+  grid-template: 1fr 1fr 1fr / 1fr 1fr 1fr;
+  place-items: center;
+  font-weight: bold;
+  color: var(--accent);
+  pointer-events: none;
+}
+#compass span { display: flex; flex-direction: column; align-items: center; line-height: 1; }
+#compass small { font-size: 9px; font-weight: normal; color: var(--muted); }
+#compass .c-n { grid-area: 1 / 2; color: #ff6b6b; }
+#compass .c-w { grid-area: 2 / 1; }
+#compass .c-center { grid-area: 2 / 2; font-size: 18px; }
+#compass .c-e { grid-area: 2 / 3; }
+#compass .c-s { grid-area: 3 / 2; }
+
+/* ----- Текстовое окно ----- */
+#log {
+  flex: 1;
+  overflow-y: auto;
+  font-family: "JetBrains Mono", Menlo, Consolas, monospace;
+  font-size: 13px;
+  line-height: 1.45;
+  white-space: pre-wrap;
+  padding-right: 4px;
+}
+#log .title { color: var(--accent); font-weight: bold; margin-top: 6px; }
+#log .echo { color: var(--muted); margin-top: 8px; }
+#log .good { color: var(--good); }
+#log .bad { color: var(--bad); }
+#log .combat { color: var(--combat); }
+#log .friend { color: var(--friend); }
+#log .build { color: var(--build); }
+#log .loot { color: var(--accent); }
+#log .exits { color: #9fb4d8; }
+#log .system { color: var(--muted); }
+
+#actions {
+  border-top: 1px solid var(--border);
+  margin-top: 8px;
+  padding-top: 8px;
+  font-size: 13px;
+  max-height: 40%;
+  overflow-y: auto;
+}
+#actions .situation { color: var(--accent); margin-bottom: 6px; }
+#actions .row { display: flex; align-items: baseline; gap: 6px; margin: 3px 0; flex-wrap: wrap; }
+#actions .row .what { color: var(--muted); min-width: 150px; }
+#actions button { font-family: Menlo, Consolas, monospace; font-size: 12px; padding: 2px 6px; }
+#actions button.fill { border-style: dashed; }
+
+#command-form {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 8px;
+  font-family: Menlo, Consolas, monospace;
+}
+#command-form .prompt { color: var(--accent); font-weight: bold; }
+#command-input {
+  flex: 1;
+  background: #0b0d12;
+  color: var(--text);
+  border: 1px solid var(--border);
+  border-radius: 5px;
+  padding: 8px;
+  font: inherit;
+}
+#command-input:focus { outline: none; border-color: var(--accent); }
+
+/* ----- Персонаж ----- */
+#stats-panel { overflow-y: auto; font-size: 14px; }
+.bar { background: #0b0d12; border-radius: 4px; height: 16px; position: relative; margin: 3px 0 8px; overflow: hidden; }
+.bar > div { height: 100%; }
+.bar span { position: absolute; inset: 0; font-size: 11px; text-align: center; line-height: 16px; }
+.bar.hp > div { background: #b33a3a; }
+.bar.mp > div { background: #3a5fb3; }
+.bar.xp > div { background: #8a6d1f; }
+.stat-line { display: flex; justify-content: space-between; align-items: center; margin: 4px 0; }
+.item-line { display: flex; justify-content: space-between; align-items: center; gap: 4px; margin: 3px 0; }
+.item-line .btns { display: flex; gap: 3px; }
+.item-line button { font-size: 11px; padding: 1px 5px; }
+.muted { color: var(--muted); }
