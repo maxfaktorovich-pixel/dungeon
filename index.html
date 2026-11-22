@@ -4,7 +4,267 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Подземелье Строителя</title>
-  <link rel="stylesheet" href="style.css">
+  <style>
+/* =====================================================================
+   ВНЕШНИЙ ВИД
+   Цвета задаются переменными — поменяй их, чтобы сменить тему.
+   ===================================================================== */
+:root {
+  --bg: #0d0f14;
+  --panel: #161a22;
+  --border: #2a3140;
+  --text: #d6dbe4;
+  --muted: #7d8799;
+  --accent: #f0b84a;
+  --good: #7ddc84;
+  --bad: #ff7a7a;
+  --combat: #ffb36b;
+  --friend: #8cc8ff;
+  --build: #c79bff;
+  --room: #2a3345;
+  --cell: 52px;
+}
+
+* { box-sizing: border-box; }
+
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--text);
+  font-family: system-ui, sans-serif;
+  height: 100vh;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+
+/* ----- Верхняя полоска и режимы ----- */
+#topbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px 12px 0;
+}
+#topbar h1 { margin: 0; font-size: 18px; color: var(--accent); }
+#modes { display: flex; gap: 6px; }
+#modes button { font-size: 15px; padding: 6px 14px; }
+
+#app {
+  flex: 1;
+  display: grid;
+  gap: 10px;
+  padding: 10px;
+  min-height: 0;
+}
+/* Приключение: карта | текст | герой */
+#app.mode-adventure { grid-template-columns: minmax(300px, 1fr) minmax(380px, 1.3fr) 290px; }
+/* Строитель: карта | редактор комнаты */
+#app.mode-builder { grid-template-columns: 1fr 380px; }
+#app.mode-adventure .builder-only,
+#app.mode-builder .adventure-only { display: none; }
+
+.panel {
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 10px;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+
+h2, h3 { margin: 0 0 8px; font-size: 15px; color: var(--accent); }
+h3 { margin-top: 14px; }
+
+button {
+  background: #232a38;
+  color: var(--text);
+  border: 1px solid var(--border);
+  border-radius: 5px;
+  padding: 4px 8px;
+  cursor: pointer;
+  font: inherit;
+  font-size: 13px;
+}
+button:hover { border-color: var(--accent); }
+button.active { background: var(--accent); color: #000; border-color: var(--accent); }
+
+/* ----- Карта ----- */
+#map-panel { position: relative; }
+#map-hint { color: var(--muted); font-size: 12px; margin-bottom: 6px; }
+
+#map-wrap {
+  flex: 1;
+  overflow: auto;
+  display: flex;
+  min-height: 0;
+}
+
+#map {
+  display: grid;
+  gap: 8px;
+  margin: auto; /* по центру, пока карта маленькая */
+  padding: 10px;
+}
+
+.cell {
+  width: var(--cell);
+  height: var(--cell);
+  border-radius: 6px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 26px;
+  position: relative;
+  user-select: none;
+}
+
+.cell.room { background: var(--room); border: 2px solid #3a4660; }
+.mode-builder .cell.room { cursor: pointer; }
+.mode-builder .cell.room:hover { border-color: var(--build); }
+.cell.room.selected { outline: 3px solid var(--build); outline-offset: 2px; }
+.cell.room.here { border-color: var(--accent); box-shadow: 0 0 10px var(--accent); }
+.cell.room.danger { border-color: var(--bad); }
+.cell .badge {
+  position: absolute; right: -8px; top: -8px; font-size: 16px;
+  background: var(--panel); border: 1px solid var(--bad); border-radius: 50%;
+  width: 24px; height: 24px; display: flex; align-items: center; justify-content: center;
+}
+.cell.buildable { border: 2px dashed #2c3445; cursor: pointer; }
+.cell.buildable:hover { border-color: var(--build); }
+.cell.buildable:hover::before { content: "+"; color: var(--build); font-size: 22px; }
+.cell.void { visibility: hidden; }
+
+/* Проходы между соседними комнатами */
+.cell.door-e::after {
+  content: ""; position: absolute; right: -12px; top: 50%;
+  width: 12px; height: 8px; margin-top: -4px; background: #3a4660;
+}
+.cell.door-s::before {
+  content: ""; position: absolute; bottom: -12px; left: 50%;
+  width: 8px; height: 12px; margin-left: -4px; background: #3a4660;
+}
+
+/* Компас */
+#compass {
+  position: absolute;
+  right: 14px;
+  bottom: 14px;
+  width: 110px;
+  height: 110px;
+  border-radius: 50%;
+  background: rgba(13, 15, 20, 0.85);
+  border: 2px solid var(--accent);
+  display: grid;
+  grid-template: 1fr 1fr 1fr / 1fr 1fr 1fr;
+  place-items: center;
+  font-weight: bold;
+  color: var(--accent);
+  pointer-events: none;
+}
+#compass span { display: flex; flex-direction: column; align-items: center; line-height: 1; }
+#compass small { font-size: 9px; font-weight: normal; color: var(--muted); }
+#compass .c-n { grid-area: 1 / 2; color: #ff6b6b; }
+#compass .c-w { grid-area: 2 / 1; }
+#compass .c-center { grid-area: 2 / 2; font-size: 18px; }
+#compass .c-e { grid-area: 2 / 3; }
+#compass .c-s { grid-area: 3 / 2; }
+
+/* ----- Текстовое окно ----- */
+#log {
+  flex: 1;
+  overflow-y: auto;
+  font-family: "JetBrains Mono", Menlo, Consolas, monospace;
+  font-size: 13px;
+  line-height: 1.45;
+  white-space: pre-wrap;
+  padding-right: 4px;
+}
+#log .title { color: var(--accent); font-weight: bold; margin-top: 6px; }
+#log .echo { color: var(--muted); margin-top: 8px; }
+#log .good { color: var(--good); }
+#log .bad { color: var(--bad); }
+#log .combat { color: var(--combat); }
+#log .friend { color: var(--friend); }
+#log .build { color: var(--build); }
+#log .loot { color: var(--accent); }
+#log .exits { color: #9fb4d8; }
+#log .system { color: var(--muted); }
+
+#actions {
+  border-top: 1px solid var(--border);
+  margin-top: 8px;
+  padding-top: 8px;
+  font-size: 13px;
+  max-height: 40%;
+  overflow-y: auto;
+}
+#actions .situation { color: var(--accent); margin-bottom: 6px; }
+#actions .row { margin: 3px 0; color: var(--muted); }
+#actions code, .kw {
+  font-family: Menlo, Consolas, monospace;
+  color: var(--text);
+  background: #232a38;
+  border-radius: 4px;
+  padding: 1px 5px;
+  font-size: 12px;
+}
+.kw { color: var(--muted); background: none; padding: 0; }
+
+#command-form {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 8px;
+  font-family: Menlo, Consolas, monospace;
+}
+#command-form .prompt { color: var(--accent); font-weight: bold; }
+#command-input {
+  flex: 1;
+  background: #0b0d12;
+  color: var(--text);
+  border: 1px solid var(--border);
+  border-radius: 5px;
+  padding: 8px;
+  font: inherit;
+}
+#command-input:focus { outline: none; border-color: var(--accent); }
+
+/* ----- Персонаж ----- */
+#stats-panel { overflow-y: auto; font-size: 14px; }
+.bar { background: #0b0d12; border-radius: 4px; height: 16px; position: relative; margin: 3px 0 8px; overflow: hidden; }
+.bar > div { height: 100%; }
+.bar span { position: absolute; inset: 0; font-size: 11px; text-align: center; line-height: 16px; }
+.bar.hp > div { background: #b33a3a; }
+.bar.xp > div { background: #8a6d1f; }
+.stat-line { margin: 4px 0; }
+.item-line { margin: 3px 0; }
+.item-line button { font-size: 11px; padding: 1px 6px; }
+.muted { color: var(--muted); }
+.small { font-size: 12px; margin-top: 4px; }
+
+/* ----- Редактор комнаты (строитель) ----- */
+#editor-panel { overflow-y: auto; font-size: 14px; }
+#editor label { display: block; margin: 12px 0 4px; color: var(--build); font-size: 13px; }
+#editor input, #editor textarea, #editor select {
+  width: 100%;
+  background: #0b0d12;
+  color: var(--text);
+  border: 1px solid var(--border);
+  border-radius: 5px;
+  padding: 6px;
+  font: inherit;
+}
+#editor textarea { resize: vertical; }
+#editor input:focus, #editor textarea:focus, #editor select:focus { outline: none; border-color: var(--build); }
+#ed-message { color: var(--build); min-height: 18px; margin-top: 4px; }
+.ed-row { display: flex; gap: 6px; margin-top: 6px; }
+.ed-row select { flex: 1; }
+.ed-buttons { margin-top: 18px; flex-wrap: wrap; }
+button:disabled { opacity: 0.4; cursor: not-allowed; border-color: var(--border); }
+.danger-btn:not(:disabled):hover { border-color: var(--bad); color: var(--bad); }
+  </style>
 </head>
 <body>
   <!-- ===== Верхняя полоска: переключатель режимов ===== -->
@@ -56,15 +316,1351 @@
     </section>
   </div>
 
-  <!-- Порядок важен: сначала данные, потом то, что их использует -->
-  <script src="js/data.js"></script>
-  <script src="js/game.js"></script>
-  <script src="js/world.js"></script>
-  <script src="js/player.js"></script>
-  <script src="js/combat.js"></script>
-  <script src="js/commands.js"></script>
-  <script src="js/ui.js"></script>
-  <script src="js/builder.js"></script>
-  <script src="js/main.js"></script>
+  <!-- Весь код игры. Части идут по порядку: сначала данные, потом то, что их использует -->
+  <script>
+// =====================================================================
+//  СОДЕРЖИМОЕ ИГРЫ
+//  Это самая простая часть для изменений: здесь живут предметы,
+//  монстры, друзья и названия комнат.
+//  Добавляй своё — просто скопируй похожую запись и поменяй её!
+// =====================================================================
+
+// ----- Предметы -------------------------------------------------------
+// keyword — английские слова для команд: "equip iron sword" или просто "equip sword"
+// slot: "mainHand" — основная рука (меч)
+//       "offHand"  — вторая рука (щит)
+// attack  — добавка к урону от удара
+// defense — уменьшает урон от монстров
+// heal    — предмет можно выпить: восстанавливает здоровье
+const ITEMS = {
+  rusty_sword: {
+    keyword: "rusty sword", name: "Ржавый меч", emoji: "🗡️", slot: "mainHand", attack: 2,
+    description: "Старый и щербатый, но всё ещё острый.",
+  },
+  iron_sword: {
+    keyword: "iron sword", name: "Железный меч", emoji: "⚔️", slot: "mainHand", attack: 4,
+    description: "Крепкий, хорошо выкованный клинок.",
+  },
+  wooden_shield: {
+    keyword: "wooden shield", name: "Деревянный щит", emoji: "🛡️", slot: "offHand", defense: 1,
+    description: "Лучше, чем ничего.",
+  },
+  iron_shield: {
+    keyword: "iron shield", name: "Железный щит", emoji: "🔰", slot: "offHand", defense: 2,
+    description: "Тяжёлый, но надёжный.",
+  },
+  health_potion: {
+    keyword: "potion", name: "Зелье здоровья", emoji: "🧪", heal: 12,
+    description: "Красное и пузырится. Восстанавливает здоровье.",
+  },
+};
+
+// Названия рук для окна снаряжения
+const SLOTS = {
+  mainHand: "Основная рука",
+  offHand: "Вторая рука",
+};
+
+// ----- Монстры --------------------------------------------------------
+// level — насколько монстр опасен (подсказка для строителя)
+// gold  — [от, до] сколько золота выпадает
+// loot  — какой предмет может выпасть и с каким шансом (0.3 = 30%)
+const MONSTERS = {
+  rat: {
+    name: "Гигантская крыса", emoji: "🐀", level: 1,
+    hp: 6, attack: 2, defense: 0, xp: 3, gold: [0, 2],
+  },
+  bat: {
+    name: "Летучая мышь", emoji: "🦇", level: 1,
+    hp: 5, attack: 3, defense: 0, xp: 3, gold: [0, 1],
+  },
+  slime: {
+    name: "Слизень", emoji: "🟢", level: 2,
+    hp: 12, attack: 3, defense: 0, xp: 5, gold: [1, 3],
+  },
+  goblin: {
+    name: "Гоблин", emoji: "👺", level: 2,
+    hp: 10, attack: 4, defense: 1, xp: 6, gold: [2, 6],
+    loot: { item: "health_potion", chance: 0.3 },
+  },
+  skeleton: {
+    name: "Скелет", emoji: "💀", level: 3,
+    hp: 14, attack: 5, defense: 2, xp: 10, gold: [3, 8],
+    loot: { item: "iron_shield", chance: 0.15 },
+  },
+  orc: {
+    name: "Орк", emoji: "👹", level: 4,
+    hp: 20, attack: 6, defense: 2, xp: 15, gold: [5, 12],
+    loot: { item: "iron_sword", chance: 0.2 },
+  },
+  troll: {
+    name: "Тролль", emoji: "🧌", level: 5,
+    hp: 30, attack: 8, defense: 3, xp: 25, gold: [10, 20],
+    loot: { item: "health_potion", chance: 0.5 },
+  },
+  dragon: {
+    name: "Дракон", emoji: "🐉", level: 7,
+    hp: 50, attack: 10, defense: 4, xp: 60, gold: [30, 60],
+  },
+};
+
+// ----- Друзья (мирные персонажи) ---------------------------------------
+// lines   — что персонаж говорит (по очереди, по кругу)
+// gift    — предмет, который он подарит при первом разговоре
+// service — "heal": полностью лечит героя при каждом разговоре
+const NPCS = {
+  healer: {
+    name: "Сестра Мира", emoji: "🧝‍♀️", service: "heal",
+    lines: [
+      "Да хранит тебя свет, путник. Дай-ка я залечу твои раны.",
+      "Возвращайся ко мне, когда будет тяжело.",
+    ],
+  },
+  smith: {
+    name: "Кузнец Борин", emoji: "🧔", gift: "wooden_shield",
+    lines: [
+      "Без щита туда не ходи! Держи, это тебе.",
+      "Хороший щит спасает жизнь чаще, чем хороший меч.",
+    ],
+  },
+  wizard: {
+    name: "Старый Зиб", emoji: "🧙", gift: "health_potion",
+    lines: [
+      "Ага, путник! Возьми зелье, внизу оно пригодится.",
+      "Щит уменьшает урон от каждого удара. Не забывай про него!",
+      "Если враг слишком силён — беги (flee) и возвращайся потом.",
+    ],
+  },
+  ghost: {
+    name: "Добрый призрак", emoji: "👻",
+    lines: [
+      "Уууу... Не бойся, я не кусаюсь.",
+      "Чем дальше от входа, тем страшнее монстры. Уууу!",
+      "Говорят, где-то глубоко спит дракон...",
+    ],
+  },
+  cat: {
+    name: "Котик Пушок", emoji: "🐈", gift: "health_potion",
+    lines: [
+      "Мяу! (Котик что-то тебе принёс.)",
+      "Мррр...",
+      "Мяу? Мяу.",
+    ],
+  },
+};
+
+// ----- Случайные комнаты ------------------------------------------------
+const ROOM_NAMES = [
+  "Тёмный коридор", "Сырая пещера", "Старая кладовая", "Зал колонн",
+  "Заброшенная кухня", "Комната с паутиной", "Каменный мост",
+  "Затопленный зал", "Тихая библиотека", "Грибная пещера",
+  "Сторожевая", "Зал эха",
+];
+
+const ROOM_DESCRIPTIONS = [
+  "С потолка капает вода. Где-то вдалеке слышно эхо.",
+  "Стены покрыты мхом, пахнет сыростью.",
+  "На полу валяются старые кости и обломки ящиков.",
+  "Факел на стене едва горит, отбрасывая длинные тени.",
+  "Здесь очень тихо. Даже слишком тихо.",
+  "Пол усыпан светящимися грибами.",
+  "Сквозняк шевелит паутину в углах.",
+  "На стене кто-то нацарапал: «Не ходи дальше!»",
+];
+
+// =====================================================================
+//  СОСТОЯНИЕ ИГРЫ, СОХРАНЕНИЕ И МАЛЕНЬКИЕ ПОМОЩНИКИ
+// =====================================================================
+
+// Случайное целое число от min до max (включительно)
+function rand(min, max) {
+  return Math.floor(Math.random() * (max - min + 1)) + min;
+}
+
+// Случайный элемент из списка
+function pick(list) {
+  return list[Math.floor(Math.random() * list.length)];
+}
+
+// true с вероятностью p (например, chance(0.3) — в 30% случаев)
+function chance(p) {
+  return Math.random() < p;
+}
+
+// ----- Сохранение -------------------------------------------------------
+// Игра сохраняется в браузере (localStorage) после каждой команды.
+// ВАЖНО: если ты меняешь, как устроены данные в `game` (например, добавляешь
+// новое поле игроку), увеличь SAVE_VERSION — иначе старое сохранение может
+// сломать игру. При новой версии игра просто начнётся заново.
+const SAVE_KEY = "dungeon-builder-save";
+const SAVE_VERSION = 3;
+
+// Всё, что меняется во время игры, лежит здесь
+let game = null;
+
+function newGame() {
+  game = {
+    version: SAVE_VERSION,
+    player: newPlayer(),
+    rooms: {}, // ключ — "x,y", значение — комната
+  };
+  buildStartingDungeon();
+}
+
+// Первые комнаты, с которых начинается каждая новая игра.
+// Чем дальше от входа, тем опаснее:
+//   север  — склеп со скелетом и библиотека с призраком;
+//   запад  — хижина отшельника и кладовая с летучей мышью;
+//   восток — гоблины, мост, орк... и логово дракона в самом конце!
+//
+// Как читать запись: addRoom(x, y, "Название", "Описание", { что внутри })
+//   monster — id монстра из MONSTERS, npc — id друга из NPCS,
+//   items — предметы на полу, gold — золото на полу.
+function buildStartingDungeon() {
+  // ----- Центр -----
+  addRoom(0, 0, "Входной зал",
+    "Сюда падает немного света с поверхности. Отсюда начинается подземелье.");
+  addRoom(0, -1, "Часовня",
+    "Тихое место со свечами. Здесь безопасно.", { npc: "healer" });
+  addRoom(-1, 0, "Кузница",
+    "Жарко! В горне ещё тлеют угли.", { npc: "smith" });
+  addRoom(1, 0, "Крысиный погреб",
+    "Пахнет старым сыром. Что-то шуршит в темноте.", { monster: "rat" });
+  addRoom(1, 1, "Маленькая сокровищница",
+    "В углу стоит старый сундук.", { items: ["health_potion"], gold: 7 });
+
+  // ----- Запад -----
+  addRoom(-2, 0, "Хижина отшельника",
+    "Кто-то устроил себе дом прямо в подземелье. Пахнет травами.", { npc: "wizard" });
+  addRoom(-2, 1, "Старая кладовая",
+    "Пыльные полки до потолка. Под потолком кто-то висит вниз головой...",
+    { monster: "bat", items: ["health_potion"] });
+
+  // ----- Север -----
+  addRoom(0, -2, "Коридор свечей",
+    "Вдоль стен горят свечи. Кто их зажигает — непонятно.");
+  addRoom(-1, -2, "Склеп",
+    "Каменные гробы стоят рядами. Крышка одного из них сдвинута.",
+    { monster: "skeleton", gold: 10 });
+  addRoom(1, -2, "Грибная пещера",
+    "Пол усыпан светящимися грибами. Что-то зелёное булькает в углу.",
+    { monster: "slime", items: ["health_potion"] });
+  addRoom(0, -3, "Тихая библиотека",
+    "Старые книги, паутина и холодок по спине.", { npc: "ghost" });
+
+  // ----- Восток -----
+  addRoom(2, 0, "Тёмный тоннель",
+    "Узкий проход. Под ногами хрустят кости.", { monster: "goblin" });
+  addRoom(3, 0, "Лагерь гоблинов",
+    "Костёр, драные палатки и куча награбленного.",
+    { monster: "goblin", items: ["iron_sword"], gold: 8 });
+  addRoom(3, 1, "Каменный мост",
+    "Мост над пропастью. Снизу доносится далёкий рёв.", { npc: "cat" });
+  addRoom(3, 2, "Логово орка",
+    "Повсюду разбросаны кости и сломанное оружие.",
+    { monster: "orc", items: ["iron_shield"], gold: 15 });
+  addRoom(3, 3, "Логово дракона",
+    "Огромная пещера, полная золота. Здесь жарко, как в печке.",
+    { monster: "dragon", items: ["health_potion", "health_potion"], gold: 100 });
+}
+
+// Создаёт комнату с заданным названием, описанием и содержимым
+function addRoom(x, y, name, description, stuff = {}) {
+  const room = createRoom(x, y);
+  room.name = name;
+  room.description = description;
+  if (stuff.monster) room.monster = makeMonster(stuff.monster);
+  if (stuff.npc) room.npc = makeNpc(stuff.npc);
+  if (stuff.items) room.items.push(...stuff.items);
+  if (stuff.gold) room.gold = stuff.gold;
+  return room;
+}
+
+function saveGame() {
+  localStorage.setItem(SAVE_KEY, JSON.stringify(game));
+}
+
+// Возвращает true, если удалось загрузить сохранение
+function loadGame() {
+  try {
+    const data = JSON.parse(localStorage.getItem(SAVE_KEY));
+    if (data && data.version === SAVE_VERSION) {
+      game = data;
+      return true;
+    }
+  } catch (e) {
+    console.warn("Не получилось загрузить сохранение:", e);
+  }
+  return false;
+}
+
+// =====================================================================
+//  МИР: КОМНАТЫ НА КАРТЕ
+//  Карта — это сетка. У каждой комнаты есть координаты x и y.
+//  x растёт на восток (вправо), y растёт на юг (вниз).
+//  Соседние комнаты всегда соединены проходом.
+// =====================================================================
+
+const DIRECTIONS = {
+  north: { dx: 0, dy: -1, short: "n", ru: "север" },
+  south: { dx: 0, dy: 1, short: "s", ru: "юг" },
+  east: { dx: 1, dy: 0, short: "e", ru: "восток" },
+  west: { dx: -1, dy: 0, short: "w", ru: "запад" },
+};
+
+// Превращает "n", "north" и т.п. в "north". Если не направление — null.
+function parseDirection(word) {
+  if (!word) return null;
+  word = word.toLowerCase();
+  for (const [dir, info] of Object.entries(DIRECTIONS)) {
+    if (word === dir || word === info.short) return dir;
+  }
+  return null;
+}
+
+function roomKey(x, y) {
+  return x + "," + y;
+}
+
+function getRoom(x, y) {
+  return game.rooms[roomKey(x, y)] || null;
+}
+
+function currentRoom() {
+  return getRoom(game.player.x, game.player.y);
+}
+
+// Комната в соседней клетке по направлению (или null)
+function neighbor(room, dir) {
+  const d = DIRECTIONS[dir];
+  return getRoom(room.x + d.dx, room.y + d.dy);
+}
+
+// Список направлений, куда можно пройти из комнаты
+function exitsOf(room) {
+  return Object.keys(DIRECTIONS).filter((dir) => neighbor(room, dir));
+}
+
+// Можно ли построить комнату в этой клетке?
+// Да, если клетка пустая и рядом есть хотя бы одна комната.
+function isBuildable(x, y) {
+  if (getRoom(x, y)) return false;
+  return Object.values(DIRECTIONS).some((d) => getRoom(x + d.dx, y + d.dy));
+}
+
+// ----- Создание ---------------------------------------------------------
+
+// Новая пустая комната со случайным названием и описанием
+function createRoom(x, y) {
+  const room = {
+    x, y,
+    name: pick(ROOM_NAMES),
+    description: pick(ROOM_DESCRIPTIONS),
+    monster: null, // { id, hp }
+    npc: null,     // { id, talks, giftGiven }
+    items: [],     // список id предметов на полу
+    gold: 0,
+  };
+  game.rooms[roomKey(x, y)] = room;
+  return room;
+}
+
+function makeMonster(id) {
+  return { id, hp: MONSTERS[id].hp };
+}
+
+function makeNpc(id) {
+  return { id, talks: 0, giftGiven: false };
+}
+
+// ----- Удаление ---------------------------------------------------------
+
+// Проверяет, можно ли снести комнату. Возвращает текст ошибки или null.
+function whyCantDelete(x, y) {
+  const room = getRoom(x, y);
+  if (!room) return "Там нет комнаты.";
+  if (x === 0 && y === 0) return "Входной зал сносить нельзя.";
+  if (x === game.player.x && y === game.player.y) return "Здесь стоит герой — сначала переставь его.";
+  if (!staysConnectedWithout(x, y)) return "Тогда часть подземелья окажется отрезанной.";
+  return null;
+}
+
+// Останутся ли все комнаты достижимыми от входа, если убрать (x, y)?
+// Это «поиск в ширину»: обходим комнаты от входа и считаем, сколько нашли.
+function staysConnectedWithout(x, y) {
+  const skip = roomKey(x, y);
+  const seen = new Set(["0,0"]);
+  const queue = [[0, 0]];
+  while (queue.length > 0) {
+    const [cx, cy] = queue.shift();
+    for (const d of Object.values(DIRECTIONS)) {
+      const key = roomKey(cx + d.dx, cy + d.dy);
+      if (key !== skip && game.rooms[key] && !seen.has(key)) {
+        seen.add(key);
+        queue.push([cx + d.dx, cy + d.dy]);
+      }
+    }
+  }
+  return seen.size === Object.keys(game.rooms).length - 1;
+}
+
+function deleteRoom(x, y) {
+  delete game.rooms[roomKey(x, y)];
+}
+
+// =====================================================================
+//  ГЕРОЙ: ЗДОРОВЬЕ, ОПЫТ, СУМКА, СНАРЯЖЕНИЕ
+// =====================================================================
+
+function newPlayer() {
+  const p = {
+    name: "Герой",
+    emoji: "🤺",
+    level: 1,
+    xp: 0,
+    gold: 5,
+    x: 0, y: 0,         // где стоит герой
+    lastX: 0, lastY: 0, // откуда пришёл (туда убегаем из боя)
+    inventory: ["health_potion"],
+    equipment: { mainHand: "rusty_sword", offHand: null },
+  };
+  p.hp = maxHp(p);
+  return p;
+}
+
+// Максимум здоровья растёт с уровнем
+function maxHp(p = game.player) {
+  return 15 + p.level * 5;
+}
+
+function xpToNextLevel(p = game.player) {
+  return p.level * 10;
+}
+
+// Сумма бонуса (attack или defense) от всего, что в руках
+function equipmentBonus(stat) {
+  let total = 0;
+  for (const id of Object.values(game.player.equipment)) {
+    if (id && ITEMS[id][stat]) total += ITEMS[id][stat];
+  }
+  return total;
+}
+
+function gainXp(amount) {
+  const p = game.player;
+  p.xp += amount;
+  say(`+${amount} опыта.`, "good");
+  while (p.xp >= xpToNextLevel()) {
+    p.xp -= xpToNextLevel();
+    p.level += 1;
+    p.hp = maxHp();
+    say(`🎉 НОВЫЙ УРОВЕНЬ ${p.level}! Здоровья стало больше, удар — сильнее.`, "good");
+  }
+}
+
+// Ищет предмет в списке id по запросу: "sword", "iron sword", "меч"...
+// Возвращает позицию в списке или -1.
+function findItem(list, query) {
+  query = query.toLowerCase().trim();
+  if (!query) return -1;
+  return list.findIndex((id) => {
+    const item = ITEMS[id];
+    return id === query ||
+      item.keyword === query ||
+      item.keyword.split(" ").includes(query) ||
+      item.name.toLowerCase().includes(query);
+  });
+}
+
+function itemLabel(id) {
+  return `${ITEMS[id].emoji} ${ITEMS[id].name}`;
+}
+
+function equip(query) {
+  const p = game.player;
+  const index = findItem(p.inventory, query);
+  if (index === -1) return say("У тебя в сумке нет такого предмета.", "bad");
+  const id = p.inventory[index];
+  const slot = ITEMS[id].slot;
+  if (!slot) return say(`${itemLabel(id)} нельзя взять в руку.`, "bad");
+
+  p.inventory.splice(index, 1);
+  const old = p.equipment[slot];
+  if (old) {
+    p.inventory.push(old);
+    say(`Ты убираешь в сумку: ${itemLabel(old)}.`);
+  }
+  p.equipment[slot] = id;
+  say(`Теперь в руке (${SLOTS[slot].toLowerCase()}): ${itemLabel(id)}.`, "good");
+}
+
+function unequip(query) {
+  const p = game.player;
+  for (const slot of Object.keys(p.equipment)) {
+    const id = p.equipment[slot];
+    if (id && findItem([id], query) === 0) {
+      p.equipment[slot] = null;
+      p.inventory.push(id);
+      say(`Ты убираешь в сумку: ${itemLabel(id)}.`);
+      return;
+    }
+  }
+  say("У тебя в руках нет такого предмета.", "bad");
+}
+
+// Выпить зелье. Возвращает true, если получилось.
+function useItem(query) {
+  const p = game.player;
+  const index = findItem(p.inventory, query);
+  if (index === -1) { say("У тебя в сумке нет такого предмета.", "bad"); return false; }
+  const id = p.inventory[index];
+  const item = ITEMS[id];
+  if (!item.heal) {
+    say(`${itemLabel(id)} нельзя выпить. Может, его надо взять в руку (equip)?`, "bad");
+    return false;
+  }
+  if (p.hp >= maxHp()) {
+    say("Ты и так полностью здоров(а) — побереги зелье.", "bad");
+    return false;
+  }
+  p.inventory.splice(index, 1);
+  const before = p.hp;
+  p.hp = Math.min(maxHp(), p.hp + item.heal);
+  say(`Ты выпиваешь: ${itemLabel(id)}. +${p.hp - before} здоровья.`, "good");
+  return true;
+}
+
+// =====================================================================
+//  БОЙ (пошаговый)
+//  Бой идёт, пока в комнате с героем есть монстр.
+//  Каждое действие героя в бою = один ход. После него ходит монстр.
+// =====================================================================
+
+const MISS_CHANCE = 0.1; // 10% промахов — и у героя, и у монстра
+
+function inCombat() {
+  const room = currentRoom();
+  return !!(room && room.monster);
+}
+
+function monsterLabel(monster) {
+  const t = MONSTERS[monster.id];
+  return `${t.emoji} ${t.name}`;
+}
+
+// Удар: зависит от уровня и оружия, броня монстра уменьшает урон
+function playerAttack() {
+  const p = game.player;
+  const monster = currentRoom().monster;
+  const t = MONSTERS[monster.id];
+
+  if (chance(MISS_CHANCE)) {
+    say(`Ты замахиваешься... и промахиваешься!`, "combat");
+  } else {
+    const damage = Math.max(1, rand(1, 4) + p.level + equipmentBonus("attack") - t.defense);
+    monster.hp -= damage;
+    say(`Ты бьёшь: ${monsterLabel(monster)} получает ${damage} урона.`, "combat");
+  }
+  afterPlayerTurn();
+}
+
+// Вызывается после каждого хода героя в бою
+function afterPlayerTurn() {
+  const room = currentRoom();
+  const monster = room.monster;
+  if (!monster) return;
+  if (monster.hp <= 0) {
+    defeatMonster(room);
+  } else {
+    monsterTurn(room);
+  }
+}
+
+// Ход монстра: щит уменьшает урон
+function monsterTurn(room) {
+  const p = game.player;
+  const monster = room.monster;
+  const t = MONSTERS[monster.id];
+
+  if (chance(MISS_CHANCE)) {
+    say(`${monsterLabel(monster)} промахивается!`, "combat");
+    return;
+  }
+  const damage = Math.max(1, rand(Math.ceil(t.attack / 2), t.attack) - equipmentBonus("defense"));
+  p.hp -= damage;
+  say(`${monsterLabel(monster)} бьёт тебя: −${damage} здоровья.`, "bad");
+  if (p.hp <= 0) playerDies(room);
+}
+
+function defeatMonster(room) {
+  const p = game.player;
+  const t = MONSTERS[room.monster.id];
+  say(`🏆 Победа! ${t.emoji} ${t.name} повержен(а).`, "good");
+  room.monster = null;
+
+  const gold = rand(t.gold[0], t.gold[1]);
+  if (gold > 0) {
+    p.gold += gold;
+    say(`Ты находишь ${gold} 🪙 золота.`, "good");
+  }
+  if (t.loot && chance(t.loot.chance)) {
+    room.items.push(t.loot.item);
+    say(`На пол что-то упало: ${itemLabel(t.loot.item)}. (take — подобрать)`, "good");
+  }
+  gainXp(t.xp);
+}
+
+// Герой не умирает насовсем: он просыпается у входа и теряет половину золота
+function playerDies(room) {
+  const p = game.player;
+  room.monster.hp = MONSTERS[room.monster.id].hp; // монстр восстанавливается
+  const lost = Math.floor(p.gold / 2);
+  p.gold -= lost;
+  p.hp = maxHp();
+  say(`💫 Ты теряешь сознание... и просыпаешься у входа. Потеряно ${lost} 🪙.`, "bad");
+  moveTo(0, 0);
+}
+
+// Побег: 50% шанс вернуться туда, откуда пришёл
+function tryFlee() {
+  const p = game.player;
+  const room = currentRoom();
+  if (!chance(0.5)) {
+    say("Ты пытаешься убежать, но не успеваешь!", "bad");
+    monsterTurn(room);
+    return;
+  }
+
+  let target = getRoom(p.lastX, p.lastY);
+  if (!target || target === room) {
+    const exits = exitsOf(room);
+    if (exits.length === 0) {
+      say("Бежать некуда!", "bad");
+      monsterTurn(room);
+      return;
+    }
+    target = neighbor(room, pick(exits));
+  }
+  say("Ты убегаешь!", "combat");
+  moveTo(target.x, target.y);
+}
+
+// =====================================================================
+//  КОМАНДЫ ПРИКЛЮЧЕНИЯ
+//  Команды пишутся по-английски, как в настоящих MUD-ах 90-х.
+//  Каждая команда — запись в списке COMMANDS:
+//    name    — главное слово команды
+//    aliases — другие слова, которые делают то же самое
+//    usage   — как писать команду (для help)
+//    help    — что команда делает (по-русски)
+//    suggest — функция: какие варианты команды подходят прямо сейчас.
+//              Они показываются в подсказке «Что можно сделать».
+//              Пустой список = сейчас команда не нужна.
+//    run     — функция, которая выполняет команду (args — слова после команды)
+//  Чтобы добавить команду — скопируй похожую и поменяй!
+// =====================================================================
+
+// ----- Общие действия ---------------------------------------------------
+
+// Перейти в комнату (x, y) и осмотреться
+function moveTo(x, y) {
+  const p = game.player;
+  p.lastX = p.x;
+  p.lastY = p.y;
+  p.x = x;
+  p.y = y;
+  describeRoom();
+}
+
+// Рассказать, что видно в текущей комнате
+function describeRoom() {
+  const room = currentRoom();
+  say(`== ${room.name} ==`, "title");
+  say(room.description);
+
+  if (room.monster) {
+    const t = MONSTERS[room.monster.id];
+    say(`⚔️ Здесь враг: ${monsterLabel(room.monster)} (здоровье ${room.monster.hp}/${t.hp}). Он не даёт пройти!`, "bad");
+  }
+  if (room.npc) {
+    const n = NPCS[room.npc.id];
+    say(`Здесь есть друг: ${n.emoji} ${n.name}.`, "friend");
+  }
+  if (room.items.length > 0) {
+    say(`На полу лежит: ${room.items.map(itemLabel).join(", ")}.`, "loot");
+  }
+  if (room.gold > 0) {
+    say(`На полу блестит ${room.gold} 🪙 золота.`, "loot");
+  }
+
+  const exits = exitsOf(room);
+  if (exits.length > 0) {
+    say("Выходы: " + exits.map((d) => `${d} (${DIRECTIONS[d].ru})`).join(", "), "exits");
+  } else {
+    say("Выходов нет.", "exits");
+  }
+}
+
+// Английское слово для предмета в подсказках: "iron sword", "potion"
+function itemWord(id) {
+  return ITEMS[id].keyword;
+}
+
+// Убирает повторы из списка
+function unique(list) {
+  return [...new Set(list)];
+}
+
+// ----- Список команд ----------------------------------------------------
+
+const COMMANDS = [
+  // ---------- Бой ----------
+  {
+    name: "attack", aliases: ["a", "kill", "hit"],
+    usage: "attack",
+    help: "ударить врага",
+    suggest: () => (inCombat() ? ["attack"] : []),
+    run() {
+      if (!inCombat()) return say("Здесь некого атаковать.", "bad");
+      playerAttack();
+    },
+  },
+  {
+    name: "flee", aliases: ["run"],
+    usage: "flee",
+    help: "попробовать убежать из боя (50% шанс)",
+    suggest: () => (inCombat() ? ["flee"] : []),
+    run() {
+      if (!inCombat()) return say("Тебе не от кого убегать.", "bad");
+      tryFlee();
+    },
+  },
+
+  // ---------- Передвижение ----------
+  {
+    name: "go", aliases: ["walk", "move"],
+    usage: "go <направление>  или просто n, s, e, w",
+    help: "пойти в соседнюю комнату",
+    suggest: () => (inCombat() ? [] : exitsOf(currentRoom()).map((d) => `${DIRECTIONS[d].short} (${DIRECTIONS[d].ru})`)),
+    run(args) {
+      const dir = parseDirection(args[0]);
+      if (!dir) return say("Куда? Например: go north (или просто n)", "bad");
+      if (inCombat()) return say("Враг не даёт пройти! Сражайся (attack) или беги (flee).", "bad");
+      const next = neighbor(currentRoom(), dir);
+      if (!next) return say(`На ${DIRECTIONS[dir].ru} хода нет.`, "bad");
+      moveTo(next.x, next.y);
+    },
+  },
+  {
+    name: "look", aliases: ["l"],
+    usage: "look",
+    help: "осмотреться",
+    suggest: () => ["look"],
+    run() { describeRoom(); },
+  },
+
+  // ---------- Друзья и предметы ----------
+  {
+    name: "talk", aliases: ["say", "chat"],
+    usage: "talk",
+    help: "поговорить с другом",
+    suggest: () => (currentRoom().npc && !inCombat() ? ["talk"] : []),
+    run() {
+      const room = currentRoom();
+      if (!room.npc) return say("Здесь не с кем поговорить.", "bad");
+      if (inCombat()) return say("Сейчас не до разговоров!", "bad");
+      const npc = room.npc;
+      const t = NPCS[npc.id];
+      say(`${t.emoji} ${t.name}: «${t.lines[npc.talks % t.lines.length]}»`, "friend");
+      npc.talks += 1;
+
+      if (t.gift && !npc.giftGiven) {
+        npc.giftGiven = true;
+        game.player.inventory.push(t.gift);
+        say(`Ты получаешь: ${itemLabel(t.gift)}!`, "good");
+      }
+      if (t.service === "heal") {
+        game.player.hp = maxHp();
+        say("✨ Здоровье полностью восстановлено.", "good");
+      }
+    },
+  },
+  {
+    name: "take", aliases: ["get", "pick"],
+    usage: "take",
+    help: "подобрать всё с пола",
+    suggest: () => {
+      const room = currentRoom();
+      return !inCombat() && (room.items.length > 0 || room.gold > 0) ? ["take"] : [];
+    },
+    run() {
+      const room = currentRoom();
+      if (inCombat()) return say("Сначала разберись с врагом!", "bad");
+      if (room.items.length === 0 && room.gold === 0) return say("Тут нечего брать.", "bad");
+      for (const id of room.items) {
+        game.player.inventory.push(id);
+        say(`Ты подбираешь: ${itemLabel(id)}.`, "good");
+      }
+      room.items = [];
+      if (room.gold > 0) {
+        game.player.gold += room.gold;
+        say(`Ты подбираешь ${room.gold} 🪙 золота.`, "good");
+        room.gold = 0;
+      }
+    },
+  },
+  {
+    name: "use", aliases: ["drink", "quaff"],
+    usage: "use <предмет>",
+    help: "выпить зелье (в бою это тратит ход)",
+    suggest: () => unique(game.player.inventory
+      .filter((id) => ITEMS[id].heal && game.player.hp < maxHp())
+      .map((id) => "use " + itemWord(id))),
+    run(args) {
+      if (useItem(args.join(" ")) && inCombat()) afterPlayerTurn();
+    },
+  },
+  {
+    name: "equip", aliases: ["wield", "wear"],
+    usage: "equip <предмет>",
+    help: "взять в руку меч или щит",
+    suggest: () => (inCombat() ? [] : unique(game.player.inventory
+      .filter((id) => ITEMS[id].slot)
+      .map((id) => "equip " + itemWord(id)))),
+    run(args) {
+      if (inCombat()) return say("В бою некогда переодеваться!", "bad");
+      equip(args.join(" "));
+    },
+  },
+  {
+    name: "remove", aliases: ["unequip", "unwield"],
+    usage: "remove <предмет>",
+    help: "убрать предмет из руки в сумку",
+    suggest: () => [],
+    run(args) {
+      if (inCombat()) return say("В бою некогда переодеваться!", "bad");
+      unequip(args.join(" "));
+    },
+  },
+  {
+    name: "drop", aliases: [],
+    usage: "drop <предмет>",
+    help: "бросить предмет на пол",
+    suggest: () => [],
+    run(args) {
+      const p = game.player;
+      const index = findItem(p.inventory, args.join(" "));
+      if (index === -1) return say("У тебя в сумке нет такого предмета.", "bad");
+      const [id] = p.inventory.splice(index, 1);
+      currentRoom().items.push(id);
+      say(`Ты бросаешь на пол: ${itemLabel(id)}.`);
+    },
+  },
+  {
+    name: "inventory", aliases: ["i", "inv"],
+    usage: "inventory  или  i",
+    help: "посмотреть, что в сумке и в руках",
+    suggest: () => [],
+    run() {
+      const p = game.player;
+      for (const [slot, label] of Object.entries(SLOTS)) {
+        const id = p.equipment[slot];
+        say(`${label}: ${id ? `${itemLabel(id)} [${itemWord(id)}]` : "пусто"}`);
+      }
+      if (p.inventory.length === 0) return say("Сумка пуста.");
+      say("В сумке:");
+      for (const id of p.inventory) say(`  ${itemLabel(id)} [${itemWord(id)}]`);
+    },
+  },
+
+  // ---------- Разное ----------
+  {
+    name: "help", aliases: ["?", "commands"],
+    usage: "help",
+    help: "показать все команды",
+    suggest: () => ["help"],
+    run() {
+      say("Все команды:", "title");
+      for (const c of COMMANDS) {
+        say(`  ${c.usage} — ${c.help}`, "system");
+      }
+      say("Направления: north (n) — север, south (s) — юг, east (e) — восток, west (w) — запад.", "system");
+    },
+  },
+  {
+    name: "reset", aliases: [],
+    usage: "reset",
+    help: "начать игру заново (всё подземелье пропадёт!)",
+    suggest: () => [],
+    run() {
+      if (!confirm("Точно начать заново? Всё подземелье пропадёт!")) return;
+      newGame();
+      clearLog();
+      say("Новая игра началась!", "title");
+      describeRoom();
+    },
+  },
+];
+
+// Найти команду по слову (по имени или по другому слову)
+function findCommand(word) {
+  return COMMANDS.find((c) => c.name === word || c.aliases.includes(word)) || null;
+}
+
+// Главная функция: выполнить строку, которую ввёл игрок
+function runCommand(text) {
+  text = text.trim();
+  if (!text) return;
+  say("> " + text, "echo");
+
+  let [word, ...args] = text.split(/\s+/);
+  word = word.toLowerCase();
+
+  // Просто направление ("n", "north") — значит "go n"
+  if (parseDirection(word)) {
+    args = [word];
+    word = "go";
+  }
+
+  const command = findCommand(word);
+  if (command) {
+    command.run(args);
+  } else {
+    say("Не понимаю такую команду. Набери help, чтобы увидеть все команды.", "bad");
+  }
+
+  saveGame();
+  renderAll();
+}
+
+// =====================================================================
+//  ЭКРАН: РЕЖИМЫ, КАРТА И ПАНЕЛИ ПРИКЛЮЧЕНИЯ
+//  Здесь только рисование. Правила игры — в частях выше.
+//  Режим «Строитель» рисуется в части «РЕЖИМ «СТРОИТЕЛЬ»» ниже.
+//
+//  В режиме «Приключение» нет кнопок — только текстовые команды,
+//  как в настоящем MUD. Мышка нужна только строителю.
+// =====================================================================
+
+// "adventure" — приключение, "builder" — строитель
+let mode = "adventure";
+
+function setMode(newMode) {
+  mode = newMode;
+  document.getElementById("app").className = "mode-" + mode;
+  document.querySelectorAll("#modes button").forEach((b) =>
+    b.classList.toggle("active", b.dataset.mode === mode));
+
+  if (mode === "adventure") {
+    say("— Ты возвращаешься в подземелье —", "system");
+    describeRoom();
+    renderAll();
+    document.getElementById("command-input").focus();
+  } else {
+    startBuilder();
+    renderAll();
+  }
+}
+
+function setupModes() {
+  document.querySelectorAll("#modes button").forEach((b) =>
+    b.addEventListener("click", () => {
+      if (b.dataset.mode !== mode) setMode(b.dataset.mode);
+    }));
+}
+
+function renderAll() {
+  renderMap();
+  if (mode === "adventure") {
+    renderStats();
+    renderActions();
+  } else {
+    renderEditor();
+  }
+}
+
+// ----- Текстовое окно ---------------------------------------------------
+
+// Напечатать строку в окно. cls — цвет: "good", "bad", "combat" и т.д.
+function say(text, cls = "") {
+  const log = document.getElementById("log");
+  const line = document.createElement("div");
+  line.textContent = text;
+  if (cls) line.className = cls;
+  log.appendChild(line);
+  // Чтобы окно не тормозило, храним только последние 300 строк
+  while (log.children.length > 300) log.removeChild(log.firstChild);
+  log.scrollTop = log.scrollHeight;
+}
+
+function clearLog() {
+  document.getElementById("log").innerHTML = "";
+}
+
+// ----- Карта ------------------------------------------------------------
+
+// Какой значок показать в комнате
+function roomIcon(room) {
+  const p = game.player;
+  if (room.x === p.x && room.y === p.y) return p.emoji;
+  if (room.monster) return MONSTERS[room.monster.id].emoji;
+  if (room.npc) return NPCS[room.npc.id].emoji;
+  if (room.items.length > 0 || room.gold > 0) return "💰";
+  return "";
+}
+
+function renderMap() {
+  const rooms = Object.values(game.rooms);
+  const xs = rooms.map((r) => r.x);
+  const ys = rooms.map((r) => r.y);
+  // Рисуем на одну клетку шире со всех сторон — там строитель может строить
+  const minX = Math.min(...xs) - 1, maxX = Math.max(...xs) + 1;
+  const minY = Math.min(...ys) - 1, maxY = Math.max(...ys) + 1;
+
+  const map = document.getElementById("map");
+  map.style.gridTemplateColumns = `repeat(${maxX - minX + 1}, var(--cell))`;
+  map.innerHTML = "";
+
+  for (let y = minY; y <= maxY; y++) {
+    for (let x = minX; x <= maxX; x++) {
+      const cell = document.createElement("div");
+      const room = getRoom(x, y);
+      if (room) {
+        cell.className = "cell room";
+        if (getRoom(x + 1, y)) cell.classList.add("door-e");
+        if (getRoom(x, y + 1)) cell.classList.add("door-s");
+        const heroHere = x === game.player.x && y === game.player.y;
+        if (heroHere) cell.classList.add("here");
+        if (mode === "builder" && roomKey(x, y) === selectedKey) cell.classList.add("selected");
+        cell.textContent = roomIcon(room);
+        cell.title = room.name;
+        // Если герой стоит рядом с монстром — показываем монстра маленьким значком
+        if (heroHere && room.monster) {
+          cell.classList.add("danger");
+          const badge = document.createElement("span");
+          badge.className = "badge";
+          badge.textContent = MONSTERS[room.monster.id].emoji;
+          cell.appendChild(badge);
+        }
+      } else if (mode === "builder" && isBuildable(x, y)) {
+        cell.className = "cell buildable";
+        cell.title = "Построить здесь комнату";
+      } else {
+        cell.className = "cell void";
+      }
+      // Кликать по карте можно только в режиме строителя
+      if (mode === "builder") cell.addEventListener("click", () => onBuilderMapClick(x, y));
+      map.appendChild(cell);
+    }
+  }
+
+  document.getElementById("map-hint").textContent = mode === "builder"
+    ? "Кликни по пунктирной клетке, чтобы построить комнату. Кликни по комнате, чтобы её настроить."
+    : "Ты — это 🤺. Чтобы пойти куда-то, набери направление: n, s, e или w.";
+
+  const here = map.querySelector(".here");
+  if (here) here.scrollIntoView({ block: "nearest", inline: "nearest" });
+}
+
+// ----- «Что можно сделать» (только текст, без кнопок) --------------------
+
+function renderActions() {
+  const box = document.getElementById("actions");
+  box.innerHTML = "";
+
+  const room = currentRoom();
+  const situation = document.createElement("div");
+  situation.className = "situation";
+  situation.textContent = inCombat()
+    ? `⚔️ Бой! Противник: ${monsterLabel(room.monster)}. Что будешь делать?`
+    : `📍 Ты в комнате «${room.name}». Что можно сделать:`;
+  box.appendChild(situation);
+
+  for (const command of COMMANDS) {
+    const suggestions = command.suggest();
+    if (suggestions.length === 0) continue;
+
+    const row = document.createElement("div");
+    row.className = "row";
+    for (const [i, text] of suggestions.entries()) {
+      if (i > 0) row.append(", ");
+      const code = document.createElement("code");
+      code.textContent = text;
+      row.appendChild(code);
+    }
+    row.append(" — " + command.help);
+    box.appendChild(row);
+  }
+}
+
+// ----- Окно героя -------------------------------------------------------
+
+function bar(cls, value, max, label) {
+  const percent = Math.max(0, Math.min(100, (value / max) * 100));
+  return `<div class="bar ${cls}"><div style="width:${percent}%"></div><span>${label} ${value}/${max}</span></div>`;
+}
+
+function renderStats() {
+  const p = game.player;
+  let html = `<h2>${p.emoji} ${p.name} — уровень ${p.level}</h2>`;
+  html += bar("hp", p.hp, maxHp(), "❤️ Здоровье");
+  html += bar("xp", p.xp, xpToNextLevel(), "⭐ Опыт");
+
+  if (inCombat()) {
+    const monster = currentRoom().monster;
+    html += `<h3>⚔️ Враг: ${monsterLabel(monster)}</h3>`;
+    html += bar("hp", monster.hp, MONSTERS[monster.id].hp, "Здоровье");
+  }
+
+  html += `<div class="stat-line">🪙 Золото: <b>${p.gold}</b></div>`;
+  html += `<div class="stat-line muted">Атака +${equipmentBonus("attack")} · Защита +${equipmentBonus("defense")}</div>`;
+
+  // В квадратных скобках — слово, которое писать в командах
+  const word = (id) => `<span class="kw">[${ITEMS[id].keyword}]</span>`;
+
+  html += `<h3>✋ Снаряжение</h3>`;
+  for (const [slot, label] of Object.entries(SLOTS)) {
+    const id = p.equipment[slot];
+    html += `<div class="item-line">${label}: ${id ? `${itemLabel(id)} ${word(id)}` : '<span class="muted">пусто</span>'}</div>`;
+  }
+
+  html += `<h3>🎒 Сумка</h3>`;
+  if (p.inventory.length === 0) html += `<div class="muted">Пусто</div>`;
+  for (const id of p.inventory) {
+    html += `<div class="item-line" title="${ITEMS[id].description}">${itemLabel(id)} ${word(id)}</div>`;
+  }
+
+  document.getElementById("stats").innerHTML = html;
+}
+
+// ----- Строка ввода -----------------------------------------------------
+
+const commandHistory = [];
+let historyIndex = 0;
+
+function setupInput() {
+  const form = document.getElementById("command-form");
+  const input = document.getElementById("command-input");
+
+  form.addEventListener("submit", (event) => {
+    event.preventDefault();
+    const text = input.value;
+    input.value = "";
+    if (text.trim()) {
+      commandHistory.push(text);
+      historyIndex = commandHistory.length;
+    }
+    runCommand(text);
+  });
+
+  // Стрелки вверх/вниз — прошлые команды
+  input.addEventListener("keydown", (event) => {
+    if (event.key === "ArrowUp" && historyIndex > 0) {
+      historyIndex -= 1;
+      input.value = commandHistory[historyIndex];
+      event.preventDefault();
+    } else if (event.key === "ArrowDown") {
+      historyIndex = Math.min(commandHistory.length, historyIndex + 1);
+      input.value = commandHistory[historyIndex] || "";
+      event.preventDefault();
+    }
+  });
+}
+
+// =====================================================================
+//  РЕЖИМ «СТРОИТЕЛЬ»
+//  Здесь строят подземелье мышкой: кликаешь по карте, выбираешь комнату
+//  и настраиваешь её в редакторе справа.
+// =====================================================================
+
+// Какая комната выбрана в редакторе (ключ "x,y")
+let selectedKey = "0,0";
+
+function selectedRoom() {
+  return game.rooms[selectedKey] || null;
+}
+
+// При входе в режим строителя выбираем комнату, где стоит герой
+function startBuilder() {
+  selectedKey = roomKey(game.player.x, game.player.y);
+  builderMessage = "";
+}
+
+// Короткое сообщение строителю («Комната построена» и т.п.)
+let builderMessage = "";
+
+function onBuilderMapClick(x, y) {
+  if (getRoom(x, y)) {
+    selectedKey = roomKey(x, y);
+    builderMessage = "";
+  } else if (isBuildable(x, y)) {
+    const room = createRoom(x, y);
+    selectedKey = roomKey(x, y);
+    builderMessage = `🧱 Построена комната «${room.name}».`;
+    saveGame();
+  } else {
+    return;
+  }
+  renderAll();
+}
+
+// Список вариантов для выпадающего меню
+function options(entries, selected) {
+  let html = `<option value="">— никого —</option>`;
+  for (const [value, text] of entries) {
+    html += `<option value="${value}" ${value === selected ? "selected" : ""}>${text}</option>`;
+  }
+  return html;
+}
+
+function renderEditor() {
+  const box = document.getElementById("editor");
+  const room = selectedRoom();
+  if (!room) {
+    box.innerHTML = `<p class="muted">Выбери комнату на карте.</p>`;
+    return;
+  }
+
+  const heroHere = room.x === game.player.x && room.y === game.player.y;
+  const deleteProblem = whyCantDelete(room.x, room.y);
+
+  const monsterChoices = Object.entries(MONSTERS).map(([id, m]) =>
+    [id, `${m.emoji} ${m.name} — ур. ${m.level}, ❤️${m.hp}, ⚔️${m.attack}`]);
+  const friendChoices = Object.entries(NPCS).map(([id, n]) => [id, `${n.emoji} ${n.name}`]);
+  const itemChoices = Object.entries(ITEMS).map(([id, item]) =>
+    `<option value="${id}">${item.emoji} ${item.name}</option>`).join("");
+
+  // Название и описание вставляем позже через .value — так безопаснее
+  box.innerHTML = `
+    <h2 id="ed-title"></h2>
+    <div class="muted">Клетка (${room.x}, ${room.y})${heroHere ? " · здесь стоит герой 🤺" : ""}</div>
+    <div id="ed-message">${builderMessage}</div>
+
+    <label>Название</label>
+    <input id="ed-name" maxlength="40">
+
+    <label>Описание</label>
+    <textarea id="ed-desc" rows="3" maxlength="300"></textarea>
+
+    <label>👹 Монстр</label>
+    <select id="ed-monster">${options(monsterChoices, room.monster && room.monster.id)}</select>
+
+    <label>🙂 Друг</label>
+    <select id="ed-friend">${options(friendChoices, room.npc && room.npc.id)}</select>
+
+    <label>💰 Предметы на полу</label>
+    <div id="ed-items">
+      ${room.items.length === 0 ? '<div class="muted">Ничего нет</div>' : ""}
+      ${room.items.map((id, i) =>
+        `<div class="item-line">${itemLabel(id)} <button data-remove="${i}" title="Убрать">✕</button></div>`).join("")}
+    </div>
+    <div class="ed-row">
+      <select id="ed-item">${itemChoices}</select>
+      <button id="ed-add-item">+ Положить</button>
+    </div>
+
+    <label>🪙 Золото на полу</label>
+    <input id="ed-gold" type="number" min="0" max="999">
+
+    <div class="ed-row ed-buttons">
+      <button id="ed-hero" ${heroHere ? "disabled" : ""}>🤺 Поставить героя сюда</button>
+      <button id="ed-delete" class="danger-btn" ${deleteProblem ? "disabled" : ""}
+        title="${deleteProblem || "Снести эту комнату"}">💥 Снести комнату</button>
+    </div>
+    ${deleteProblem ? `<div class="muted small">Снести нельзя: ${deleteProblem}</div>` : ""}
+  `;
+
+  document.getElementById("ed-title").textContent = `🧱 ${room.name}`;
+  const nameInput = document.getElementById("ed-name");
+  const descInput = document.getElementById("ed-desc");
+  const goldInput = document.getElementById("ed-gold");
+  nameInput.value = room.name;
+  descInput.value = room.description;
+  goldInput.value = room.gold;
+
+  // --- Что происходит, когда строитель что-то меняет ---
+
+  nameInput.addEventListener("input", () => {
+    room.name = nameInput.value.trim() || "Безымянная комната";
+    document.getElementById("ed-title").textContent = `🧱 ${room.name}`;
+    saveGame();
+    renderMap();
+  });
+
+  descInput.addEventListener("input", () => {
+    room.description = descInput.value;
+    saveGame();
+  });
+
+  document.getElementById("ed-monster").addEventListener("change", (e) => {
+    room.monster = e.target.value ? makeMonster(e.target.value) : null;
+    changed("Монстр обновлён.");
+  });
+
+  document.getElementById("ed-friend").addEventListener("change", (e) => {
+    room.npc = e.target.value ? makeNpc(e.target.value) : null;
+    changed("Друг обновлён.");
+  });
+
+  box.querySelectorAll("button[data-remove]").forEach((b) =>
+    b.addEventListener("click", () => {
+      room.items.splice(Number(b.dataset.remove), 1);
+      changed("Предмет убран.");
+    }));
+
+  document.getElementById("ed-add-item").addEventListener("click", () => {
+    const id = document.getElementById("ed-item").value;
+    room.items.push(id);
+    changed(`Положено: ${itemLabel(id)}.`);
+  });
+
+  goldInput.addEventListener("change", () => {
+    room.gold = Math.max(0, Math.floor(Number(goldInput.value) || 0));
+    changed("Золото обновлено.");
+  });
+
+  document.getElementById("ed-hero").addEventListener("click", () => {
+    const p = game.player;
+    p.x = p.lastX = room.x;
+    p.y = p.lastY = room.y;
+    changed("🤺 Герой теперь стоит здесь.");
+  });
+
+  document.getElementById("ed-delete").addEventListener("click", () => {
+    const name = room.name;
+    deleteRoom(room.x, room.y);
+    selectedKey = roomKey(game.player.x, game.player.y);
+    changed(`💥 Комната «${name}» снесена.`);
+  });
+}
+
+// Сохранить, показать сообщение и всё перерисовать
+function changed(message) {
+  builderMessage = message;
+  saveGame();
+  renderAll();
+}
+
+// =====================================================================
+//  ЗАПУСК ИГРЫ
+// =====================================================================
+
+window.addEventListener("DOMContentLoaded", () => {
+  setupModes();
+  setupInput();
+
+  if (loadGame()) {
+    say("С возвращением в подземелье!", "title");
+  } else {
+    newGame();
+    say("Добро пожаловать в Подземелье Строителя!", "title");
+    say("Команды пишутся по-английски. Набери help, чтобы увидеть все.");
+    say("Хочешь строить подземелье? Нажми «🧱 Строитель» наверху.");
+  }
+
+  describeRoom();
+  renderAll();
+});
+  </script>
 </body>
 </html>
